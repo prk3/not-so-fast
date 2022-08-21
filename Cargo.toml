@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "not-so-fast",
+    "not-so-fast-derive"
+]
