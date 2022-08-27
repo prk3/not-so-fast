@@ -6,6 +6,8 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::vec;
 
+pub mod validators;
+
 /// Describes what's invalid about some value. It contains a code, an optional
 /// message, and a list of error parameters.
 #[derive(Debug)]
