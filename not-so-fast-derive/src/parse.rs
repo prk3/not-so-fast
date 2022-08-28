@@ -2,6 +2,7 @@ use proc_macro2::TokenStream;
 use quote::ToTokens;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
+use syn::token::Paren;
 use syn::*;
 
 /// Arguments to type-level validate macro.
@@ -273,6 +274,62 @@ impl ToTokens for Arg {
     }
 }
 
+/// - ``
+/// - `(args(a, b, c))`
+#[derive(Debug)]
+pub struct NestedArguments {
+    pub args: Vec<Arg>,
+}
+
+impl Parse for NestedArguments {
+    fn parse(input: ParseStream) -> Result<Self> {
+        if input.peek(Paren) {
+            let content;
+            let _ = parenthesized!(content in input);
+            let arguments = Punctuated::<NestedArgument, Token![,]>::parse_terminated(&content)?;
+            let mut args = None;
+            for argument in arguments {
+                match argument {
+                    NestedArgument::Args(ident, _) if args.is_some() => {
+                        return Err(syn::Error::new_spanned(ident, "args already defined"));
+                    }
+                    NestedArgument::Args(_, a) => {
+                        args = Some(a);
+                    }
+                }
+            }
+            Ok(Self {
+                args: args.unwrap_or_else(Vec::new),
+            })
+        } else {
+            Ok(Self { args: Vec::new() })
+        }
+    }
+}
+
+/// - `args(a, b, c)`
+#[derive(Debug)]
+pub enum NestedArgument {
+    Args(Ident, Vec<Arg>),
+}
+
+impl Parse for NestedArgument {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let ident: Ident = input.parse()?;
+        if ident == "args" {
+            let content;
+            let _ = parenthesized!(content in input);
+            let args = Punctuated::<Arg, Token![,]>::parse_terminated(&content)?;
+            Ok(Self::Args(ident, args.into_iter().collect()))
+        } else {
+            Err(syn::Error::new_spanned(
+                ident,
+                "Unsupported argument, expected \"args\"",
+            ))
+        }
+    }
+}
+
 /// Arguments to field-level validate macro.
 ///
 /// ```text
@@ -302,17 +359,10 @@ impl Parse for FieldValidateArguments {
 
 #[derive(Debug)]
 pub enum FieldValidateArgument {
-    Custom {
-        function: Path,
-        args: Option<Vec<Ident>>,
-    },
-    Nested {
-        args: Option<Vec<Ident>>,
-    },
-    Email {
-        ident: Ident,
-    },
-    Url,
+    Custom(Ident, CustomArguments),
+    Nested(Ident, NestedArguments),
+    Email(Ident),
+    Url(Ident),
     Length {
         min: Option<LengthArgument>,
         max: Option<LengthArgument>,
@@ -337,9 +387,9 @@ impl Parse for FieldValidateArgument {
     fn parse(input: ParseStream) -> Result<Self> {
         let ident = input.parse::<Ident>()?;
         match ident.to_string().as_str() {
-            "email" => {
-                Ok(Self::Email { ident })
-            }
+            "email" => Ok(Self::Email(ident)),
+            "custom" => Ok(Self::Custom(ident, input.parse()?)),
+            "nested" => Ok(Self::Nested(ident, input.parse()?)),
             _ => Err(syn::Error::new_spanned(
                 ident,
                 "Unknown argument. Expected \"email\"",
@@ -355,19 +405,3 @@ enum LengthArgument {
     LitInt(LitInt),
     Path(Path),
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -1,7 +1,7 @@
 use parse::*;
-use proc_macro2::TokenStream;
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
-use syn::*;
+use syn::{Data, DeriveInput, Fields, Index};
 
 mod parse;
 
@@ -34,87 +34,99 @@ pub fn derive_validate_args(input: proc_macro::TokenStream) -> proc_macro::Token
     }
     match type_.data {
         Data::Enum(data_enum) => {
-            if data_enum.variants.is_empty() {
-                quote! {
-                    impl ::not_so_fast::ValidateArgs for #type_name {
-                        type Args = (#(#arg_types),*);
-
-                        fn validate_args(&self, args: Self::Args) -> ::not_so_fast::ValidationErrors {
-                            // TODO apply custom validator on self
-                            ::not_so_fast::ValidationErrors::ok()
-                        }
-                    }
-                }.into()
-            } else {
-                let branches = data_enum.variants.iter().map(|variant| {
-                    let variant_name = variant.ident.clone();
-                    if variant.fields.is_empty() {
-                        return quote! { #type_name::#variant_name => ::not_so_fast::ValidationErrors::ok() };
-                    }
-                    todo!()
-                });
-                quote! {
-                    impl ::not_so_fast::ValidateArgs for #type_name {
-                        type Args = (#(#arg_types),*);
-
-                        fn validate_args(&self, args: Self::Args) -> ::not_so_fast::ValidateErrors {
-                            match self {
-                                #(#branches),*
-                            }
-                        }
-                    }
-                }
-                .into()
-            }
-        }
-        Data::Struct(data_struct) => {
-            let mut errors = Vec::new();
-            for validator in type_custom_validators {
+            let value_validators = type_custom_validators.into_iter().map(|validator| {
                 let function = validator.function;
                 let args = validator.args;
-                errors.push(quote! { .merge(#function(&self, #(#args),*)) });
-            }
+                quote! { .merge(#function(self, #(#args),*)) }
+            });
+            let args_destructure = (!arg_names.is_empty()).then(|| {
+                quote! { let (#(#arg_names),*) = args; }
+            });
 
-            for (i, field) in data_struct.fields.iter().enumerate() {
-                let mut field_errors = Vec::new();
-
-                for attr in &field.attrs {
-                    if attr.path.get_ident().map_or(false, |i| i == "validate") {
-                        let arguments = match attr.parse_args::<FieldValidateArguments>() {
-                            Ok(arguments) => arguments.arguments,
-                            Err(e) => return e.to_compile_error().into(),
-                        };
-                        for argument in arguments {
-                            if let Some(ident) = &field.ident {
-                                field_errors
-                                    .push(validate_field(quote! { &self.#ident }, &argument));
-                            } else {
-                                field_errors.push(validate_field(quote! { &self.#i }, &argument));
-                            }
+            let variants_validator = (!data_enum.variants.is_empty()).then(|| {
+                let mut branches = Vec::new();
+                for variant in data_enum.variants {
+                    let variant_name = variant.ident;
+                    let (variant_fields, variant_validators) = match variant.fields {
+                        Fields::Named(_) => {
+                            let names = variant.fields.iter().map(|field| {
+                                field.ident.as_ref().expect("Named field should have ident")
+                            });
+                            let field_validators =
+                                match validate_fields(&variant.fields, &variant_name, false) {
+                                    Ok(validators) => validators,
+                                    Err(error) => return error.to_compile_error().into(),
+                                };
+                            (
+                                Some(quote! { {#(#names),*} }),
+                                Some(quote! { #(#field_validators)* }),
+                            )
                         }
-                    }
+                        Fields::Unnamed(_) => {
+                            let names = (0..variant.fields.len())
+                                .map(|i| Ident::new(&format!("field{i}"), variant_name.span()));
+                            let field_validators =
+                                match validate_fields(&variant.fields, &variant_name, false) {
+                                    Ok(validators) => validators,
+                                    Err(error) => return error.to_compile_error().into(),
+                                };
+                            (
+                                Some(quote! { (#(#names),*) }),
+                                Some(quote! { #(#field_validators)* }),
+                            )
+                        }
+                        Fields::Unit => (None, None),
+                    };
+
+                    branches.push(quote! {
+                        #type_name::#variant_name #variant_fields =>
+                            ::not_so_fast::ValidationErrors::ok()
+                                #variant_validators
+                    })
                 }
-                if !field_errors.is_empty() {
-                    if let Some(ident) = &field.ident {
-                        let field_name = ident.to_string();
-                        errors.push(quote!(
-                            .and_field(#field_name, ValidationErrors::ok()#(#field_errors),*)
-                        ));
-                    } else {
-                        errors.push(quote!(
-                            .and_item(#i, ValidationErrors::ok()#(#field_errors),*)
-                        ));
-                    }
-                }
-            }
+
+                quote! { .merge(match self { #(#branches),* }) }
+            });
+
             quote! {
                 impl ::not_so_fast::ValidateArgs for #type_name {
                     type Args = (#(#arg_types),*);
 
                     fn validate_args(&self, args: Self::Args) -> ::not_so_fast::ValidationErrors {
-                        let (#(#arg_names),*) = args;
+                        #args_destructure
                         ::not_so_fast::ValidationErrors::ok()
-                            #(#errors)*
+                            #(#value_validators)*
+                            #variants_validator
+                    }
+                }
+            }
+            .into()
+        }
+        Data::Struct(data_struct) => {
+            let value_validators = type_custom_validators.into_iter().map(|validator| {
+                let function = validator.function;
+                let args = validator.args;
+                quote! { .merge(#function(&self, #(#args),*)) }
+            });
+
+            let field_validators = match validate_fields(&data_struct.fields, &type_name, true) {
+                Ok(validators) => validators,
+                Err(error) => return error.to_compile_error().into(),
+            };
+
+            let args_destructure = (!arg_names.is_empty()).then(|| {
+                quote! { let (#(#arg_names),*) = args; }
+            });
+
+            quote! {
+                impl ::not_so_fast::ValidateArgs for #type_name {
+                    type Args = (#(#arg_types),*);
+
+                    fn validate_args(&self, args: Self::Args) -> ::not_so_fast::ValidationErrors {
+                        #args_destructure
+                        ::not_so_fast::ValidationErrors::ok()
+                            #(#value_validators)*
+                            #(#field_validators)*
                     }
                 }
             }
@@ -124,10 +136,67 @@ pub fn derive_validate_args(input: proc_macro::TokenStream) -> proc_macro::Token
     }
 }
 
-fn validate_field(path: TokenStream, argument: &FieldValidateArgument) -> TokenStream {
+fn validate_fields(
+    fields: &Fields,
+    type_ident: &Ident,
+    in_struct: bool,
+) -> Result<Vec<TokenStream>, syn::Error> {
+    let mut field_validators = Vec::new();
+
+    for (i, field) in fields.iter().enumerate() {
+        let mut value_validators = Vec::new();
+
+        for attr in &field.attrs {
+            if attr.path.get_ident().map_or(false, |i| i == "validate") {
+                let arguments = attr.parse_args::<FieldValidateArguments>()?;
+                for argument in arguments.arguments {
+                    let path = match (&field.ident, in_struct) {
+                        (Some(ident), true) => quote! { &self.#ident },
+                        (None, true) => {
+                            let index = Index::from(i);
+                            quote! { &self.#index }
+                        },
+                        (Some(ident), false) => quote! { #ident },
+                        (None, false) => {
+                            let name = Ident::new(&format!("field{i}"), type_ident.span().clone());
+                            quote! { #name }
+                        }
+                    };
+                    value_validators.push(validate_field(path, argument));
+                }
+            }
+        }
+        if !value_validators.is_empty() {
+            if let Some(ident) = &field.ident {
+                let field_name = ident.to_string();
+                field_validators.push(quote!(
+                    .and_field(#field_name, ValidationErrors::ok()#(#value_validators),*)
+                ));
+            } else {
+                field_validators.push(quote!(
+                    .and_item(#i, ValidationErrors::ok()#(#value_validators),*)
+                ));
+            }
+        }
+    }
+
+    Ok(field_validators)
+}
+
+fn validate_field(path: TokenStream, argument: FieldValidateArgument) -> TokenStream {
+    use FieldValidateArgument::*;
     match argument {
-        FieldValidateArgument::Email { .. } => {
-            quote! { .merge(::not_so_fast::validators::email::validate_email(&#path)) }
+        Email(_) => {
+            quote! { .merge(::not_so_fast::validators::email::validate_email(#path)) }
+        }
+        Custom(_, arguments) => {
+            let function = arguments.function;
+            let args = arguments.args;
+            quote! { .merge(#function(#path, #(#args),*)) }
+        }
+        Nested(_, arguments) => {
+            let args = arguments.args;
+            quote! { .merge(::not_so_fast::ValidateArgs::validate_args(#path, (#(#args),*))) }
         }
         _ => todo!("implement other field validators"),
     }

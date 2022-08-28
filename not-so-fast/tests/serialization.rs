@@ -24,6 +24,11 @@ fn simple() {
         .and_field(
             "field_c_~!@#$%^&*()_+",
             ValidationErrors::error(Error::with_code("seven")),
+        )
+        .and_item(0, ValidationErrors::error(Error::with_code("eight")))
+        .and_item(
+            1,
+            ValidationErrors::item(2, ValidationErrors::error(Error::with_code("nine"))),
         );
 
     assert_eq!(
@@ -35,6 +40,8 @@ fn simple() {
             [".field_b[1]", "five"],
             [".field_b[1]", "six"],
             [".\"field_c_~!@#$%^&*()_+\"", "seven"],
+            [".[0]", "eight"],
+            [".[1][2]", "nine"],
         ]),
         serde_json::to_value(&errors).unwrap()
     );

@@ -3,7 +3,7 @@ use not_so_fast::*;
 fn main() {
     // - Introduction -
 
-    // This example file shows how to build validator for any data structure.
+    // This example file shows how to write a validator for any data structure.
     // I recommend you read it from start to end, as we build on what we've
     // learned earlier. You can step thought the code with a debugger, to see
     // errors printed one at a time.
@@ -357,62 +357,111 @@ fn main() {
 
     // - Parametrization -
 
-    // TODO
+    // Since manually written validators are regular, unconstrained functions,
+    // there is nothing preventing us from parameterizing them.
+
+    struct Profile {
+        name: String,
+        bio: String,
+        images: Vec<String>,
+    }
+
+    fn validate_bio(bio: &str, max_char_length: usize) -> ValidationErrors {
+        let len = bio.chars().count();
+        ValidationErrors::error_if(len > max_char_length, || {
+            Error::with_code("length")
+                .and_message("Illegal string length")
+                .and_param("max", max_char_length.to_string())
+                .and_param("value", len.to_string())
+        })
+    }
+
+    fn validate_images(images: &[String], multi_image: bool) -> ValidationErrors {
+        let limit = if multi_image { 10 } else { 1 };
+        ValidationErrors::error_if(images.len() > limit, || {
+            Error::with_code("length")
+                .and_message("Illegal list length")
+                .and_param("max", limit.to_string())
+                .and_param("value", images.len().to_string())
+        })
+    }
+
+    fn validate_profile(
+        profile: &Profile,
+        max_bio_char_length: usize,
+        multi_image: bool,
+    ) -> ValidationErrors {
+        ValidationErrors::ok()
+            .and_field("name", validate_username(&profile.name))
+            .and_field("bio", validate_bio(&profile.bio, max_bio_char_length))
+            .and_field("images", validate_images(&profile.images, multi_image))
+    }
+
+    let profile = Profile {
+        name: "foo_bar_3".into(),
+        bio: "x".repeat(1000),
+        images: vec!["one.jpg".into(), "two.jpg".into(), "three.jpg".into()],
+    };
+
+    assert!(validate_profile(&profile, 2000, true).is_ok());
+    assert!(validate_profile(&profile, 2000, false).is_err());
+    assert!(validate_profile(&profile, 300, true).is_err());
+    assert!(validate_profile(&profile, 300, false).is_err());
+
+    // To make your validators compatible with Validator derive macro, place
+    // validator parameters after the reference to value.
 
     // - Merging -
 
     // Sometimes it's convenient to split validation logic into two or more
-    // functions. In case of tree-like data, one function could validate
-    // structure of a tree, while the other could validate properties of nodes.
-    // To merge two errors together, use `merge` method.
+    // functions. In case of comments, one validator could check the length
+    // of the comment text, while the other could look for illegal words. To
+    // merge two errors together, use `merge` method.
 
-    enum TreeNode {
-        Leaf(String),
-        Parent(Vec<TreeNode>),
+    struct Comment {
+        author: String,
+        text: String,
     }
 
-    fn validate_tree_depth(node: &TreeNode, depth: usize) -> ValidationErrors {
-        match node {
-            TreeNode::Leaf(_) => ValidationErrors::ok(),
-            TreeNode::Parent(_) if depth == 0 => ValidationErrors::error(
-                Error::with_code("depth").and_message("Max tree depth exceeded"),
-            ),
-            TreeNode::Parent(nodes) => ValidationErrors::items(nodes.iter(), |_, node| {
-                validate_tree_depth(node, depth - 1)
-            }),
-        }
+    fn validate_text_length(text: &str) -> ValidationErrors {
+        ValidationErrors::error_if(text.len() > 500, || {
+            Error::with_code("byte_length").and_message("Illegal string byte length")
+        })
     }
 
-    fn validate_tree_leafs(node: &TreeNode) -> ValidationErrors {
-        match node {
-            TreeNode::Leaf(string) => ValidationErrors::error_if(string.len() > 20, || {
-                Error::with_code("length").and_message("String too long")
-            }),
-            TreeNode::Parent(nodes) => {
-                ValidationErrors::items(nodes.iter(), |_, node| validate_tree_leafs(node))
-            }
-        }
+    fn validate_text_content(text: &str) -> ValidationErrors {
+        let illegal_words = ["pineapple", "bash", "truck"];
+        let contains_illegal_word = illegal_words.iter().any(|word| text.contains(word));
+
+        ValidationErrors::error_if(contains_illegal_word, || {
+            Error::with_code("illegal_word").and_message("Text contains illegal word")
+        })
     }
 
-    fn validate_tree(node: &TreeNode) -> ValidationErrors {
-        // Recursively combine two errors
-        validate_tree_depth(node, 2).merge(validate_tree_leafs(node))
+    fn validate_comment(comment: &Comment) -> ValidationErrors {
+        ValidationErrors::ok()
+            .and_field("author", validate_username(&comment.author))
+            .and_field(
+                "text",
+                ValidationErrors::ok()
+                    .merge(validate_text_length(&comment.text))
+                    .merge(validate_text_content(&comment.text)),
+            )
     }
 
-    #[rustfmt::skip]
-    #[allow(unused_parens)]
-    let example_tree = (
-        TreeNode::Parent(vec![
-            TreeNode::Parent(vec![
-                TreeNode::Parent(vec![
-                    TreeNode::Leaf("this is too deep".into())
-                ]),
-                TreeNode::Leaf("this string is too long".into()),
-                TreeNode::Leaf("this is ok".into()),
-            ])
-        ])
-    );
+    let bad_comment_length = Comment {
+        author: "ok".into(),
+        text: "x".repeat(1000),
+    };
 
-    assert!(!validate_tree(&example_tree).is_ok());
-    print!("{}\n\n", validate_tree(&example_tree));
+    let bad_comment_content = Comment {
+        author: "ok".into(),
+        text: "I love pineapple pizza".into(),
+    };
+
+    assert!(validate_comment(&bad_comment_length).is_err());
+    assert!(validate_comment(&bad_comment_content).is_err());
+
+    // `merge` method not only moves all value errors from the error argument
+    // to `self`, but also recursively combines field/item errors.
 }

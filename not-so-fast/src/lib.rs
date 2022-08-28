@@ -783,3 +783,6 @@ impl serde::Serialize for ValidationErrors {
         seq.end()
     }
 }
+
+#[cfg(feature = "derive")]
+pub use derive::Validate;
