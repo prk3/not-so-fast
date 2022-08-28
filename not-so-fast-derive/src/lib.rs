@@ -1,6 +1,6 @@
 use parse::*;
-use proc_macro2::{Ident, Span, TokenStream};
-use quote::quote;
+use proc_macro2::{Ident, TokenStream};
+use quote::{quote, ToTokens};
 use syn::{Data, DeriveInput, Fields, Index};
 
 mod parse;
@@ -9,6 +9,26 @@ mod parse;
 pub fn derive_validate_args(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let type_: DeriveInput = syn::parse(input).expect("Input should be valid struct or enum");
     let type_name = type_.ident;
+
+    let lifetimes_full = type_.generics.lifetimes().map(|l| l as &dyn ToTokens);
+    let types_full = type_.generics.type_params().map(|t| t as &dyn ToTokens);
+    let consts_full = type_.generics.const_params().map(|t| t as &dyn ToTokens);
+    let generics_full = lifetimes_full.chain(types_full).chain(consts_full);
+
+    let lifetimes_short = type_
+        .generics
+        .lifetimes()
+        .map(|l| &l.lifetime as &dyn ToTokens);
+    let types_short = type_
+        .generics
+        .type_params()
+        .map(|t| &t.ident as &dyn ToTokens);
+    let consts_short = type_
+        .generics
+        .const_params()
+        .map(|c| &c.ident as &dyn ToTokens);
+    let generics_short = lifetimes_short.chain(types_short).chain(consts_short);
+
     let mut arg_types = Vec::new();
     let mut arg_names = Vec::new();
     let mut type_custom_validators = Vec::new();
@@ -32,15 +52,19 @@ pub fn derive_validate_args(input: proc_macro::TokenStream) -> proc_macro::Token
             }
         }
     }
+
+    let args_type = make_tuple(arg_types.as_slice());
+    let args_destructure = (!arg_names.is_empty()).then(|| {
+        let tuple = make_tuple(arg_names.as_slice());
+        quote! { let #tuple = args; }
+    });
+
     match type_.data {
         Data::Enum(data_enum) => {
             let value_validators = type_custom_validators.into_iter().map(|validator| {
                 let function = validator.function;
                 let args = validator.args;
                 quote! { .merge(#function(self, #(#args),*)) }
-            });
-            let args_destructure = (!arg_names.is_empty()).then(|| {
-                quote! { let (#(#arg_names),*) = args; }
             });
 
             let variants_validator = (!data_enum.variants.is_empty()).then(|| {
@@ -89,8 +113,8 @@ pub fn derive_validate_args(input: proc_macro::TokenStream) -> proc_macro::Token
             });
 
             quote! {
-                impl ::not_so_fast::ValidateArgs for #type_name {
-                    type Args = (#(#arg_types),*);
+                impl<'arg, #(#generics_full),*> ::not_so_fast::ValidateArgs<'arg> for #type_name<#(#generics_short),*> {
+                    type Args = #args_type;
 
                     fn validate_args(&self, args: Self::Args) -> ::not_so_fast::ValidationErrors {
                         #args_destructure
@@ -114,13 +138,9 @@ pub fn derive_validate_args(input: proc_macro::TokenStream) -> proc_macro::Token
                 Err(error) => return error.to_compile_error().into(),
             };
 
-            let args_destructure = (!arg_names.is_empty()).then(|| {
-                quote! { let (#(#arg_names),*) = args; }
-            });
-
             quote! {
-                impl ::not_so_fast::ValidateArgs for #type_name {
-                    type Args = (#(#arg_types),*);
+                impl<'arg, #(#generics_full),*> ::not_so_fast::ValidateArgs<'arg> for #type_name<#(#generics_short),*> {
+                    type Args = #args_type;
 
                     fn validate_args(&self, args: Self::Args) -> ::not_so_fast::ValidationErrors {
                         #args_destructure
@@ -155,7 +175,7 @@ fn validate_fields(
                         (None, true) => {
                             let index = Index::from(i);
                             quote! { &self.#index }
-                        },
+                        }
                         (Some(ident), false) => quote! { #ident },
                         (None, false) => {
                             let name = Ident::new(&format!("field{i}"), type_ident.span().clone());
@@ -196,8 +216,16 @@ fn validate_field(path: TokenStream, argument: FieldValidateArgument) -> TokenSt
         }
         Nested(_, arguments) => {
             let args = arguments.args;
-            quote! { .merge(::not_so_fast::ValidateArgs::validate_args(#path, (#(#args),*))) }
+            let args_tuple = make_tuple(args.as_slice());
+            quote! { .merge(::not_so_fast::ValidateArgs::validate_args(#path, #args_tuple)) }
         }
         _ => todo!("implement other field validators"),
+    }
+}
+
+fn make_tuple<T: ToTokens>(elements: &[T]) -> TokenStream {
+    match elements.len() {
+        1 => quote! { (#(#elements),*,) },
+        _ => quote! { (#(#elements),*) },
     }
 }

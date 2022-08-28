@@ -157,7 +157,7 @@ impl Parse for CustomArguments {
                     CustomArgument::Function(ident, path) if function.is_none() => {
                         function = Some((ident, path));
                     }
-                    CustomArgument::Function(ident, path) => {
+                    CustomArgument::Function(ident, _) => {
                         return Err(syn::Error::new_spanned(
                             ident,
                             "\"function\" already defined",
@@ -166,7 +166,7 @@ impl Parse for CustomArguments {
                     CustomArgument::Args(ident, a) if args.is_none() => {
                         args = Some((ident, a));
                     }
-                    CustomArgument::Args(ident, a) => {
+                    CustomArgument::Args(ident, _) => {
                         return Err(syn::Error::new_spanned(ident, "\"args\" already defined"))
                     }
                 }
@@ -175,7 +175,7 @@ impl Parse for CustomArguments {
             match function {
                 Some((ident, path)) => {
                     let (args_ident, args) =
-                        args.map_or((None, Vec::new()), |(ident, args)| (None, args));
+                        args.map_or((None, Vec::new()), |(_, args)| (None, args));
                     Ok(Self {
                         function_ident: Some(ident),
                         function: path,

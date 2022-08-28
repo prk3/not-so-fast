@@ -6,67 +6,96 @@ use not_so_fast::*;
 fn struct_no_args() {
     #[derive(Validate)]
     #[validate(custom = validate_struct_no_args)]
-    struct StructNoArgs {
-        name: String,
-        int: i32,
-        vec: Vec<String>,
-        array: [String; 3],
-        option: Option<String>,
-        map: std::collections::HashMap<String, u32>,
-    }
+    struct StructNoArgs(#[validate(nested)] Nested);
+
+    #[derive(Validate)]
+    struct Nested;
 
     fn validate_struct_no_args(value: &StructNoArgs) -> ValidationErrors {
         ValidationErrors::error(Error::with_code("struct_no_args"))
     }
 
-    let instance = StructNoArgs {
-        name: "hello".into(),
-        int: 1,
-        vec: vec!["foo".into(), "bar".into()],
-        array: ["a".into(), "b".into(), "c".into()],
-        option: Some("some".into()),
-        map: Default::default(),
-    };
-    let errors = instance.validate();
+    let errors = StructNoArgs(Nested).validate();
     assert!(errors.is_err());
     assert_eq!(".: struct_no_args", errors.to_string());
 }
 
 #[test]
-fn struct_args() {
+fn struct_one_arg() {
+    #[derive(Validate)]
+    #[validate(
+        args(a: u64),
+        custom(function = validate_struct_one_arg, args(29))
+    )]
+    struct StructOneArg(#[validate(nested(args(a)))] Nested);
+
+    #[derive(Validate)]
+    #[validate(args(a: u64))]
+    struct Nested;
+
+    fn validate_struct_one_arg(value: &StructOneArg, a: u64) -> ValidationErrors {
+        ValidationErrors::error(Error::with_code("struct_one_arg").and_param("a", a.to_string()))
+    }
+
+    let errors = StructOneArg(Nested).validate_args((29,));
+    assert!(errors.is_err());
+    assert_eq!(".: struct_one_arg: a=29", errors.to_string());
+}
+
+#[test]
+fn struct_many_args() {
     #[derive(Validate)]
     #[validate(
         args(a: u64, b: bool),
-        custom(function = validate_struct_args, args(29, b))
+        custom(function = validate_struct_many_args, args(29, b))
     )]
-    struct StructArgs {
-        name: String,
-        int: i32,
-        vec: Vec<String>,
-        array: [String; 3],
-        option: Option<String>,
-        map: std::collections::HashMap<String, u32>,
-    }
+    struct StructManyArgs(#[validate(nested(args(a, true)))] Nested);
 
-    fn validate_struct_args(value: &StructArgs, a: u64, b: bool) -> ValidationErrors {
+    #[derive(Validate)]
+    #[validate(args(a: u64, b: bool))]
+    struct Nested;
+
+    fn validate_struct_many_args(value: &StructManyArgs, a: u64, b: bool) -> ValidationErrors {
         ValidationErrors::error(
-            Error::with_code("struct_args")
+            Error::with_code("struct_many_args")
                 .and_param("a", a.to_string())
                 .and_param("b", b.to_string()),
         )
     }
 
-    let instance = StructArgs {
-        name: "hello".into(),
-        int: 1,
-        vec: vec!["foo".into(), "bar".into()],
-        array: ["a".into(), "b".into(), "c".into()],
-        option: Some("some".into()),
-        map: Default::default(),
-    };
-    let errors = instance.validate_args((29, true));
+    let errors = StructManyArgs(Nested).validate_args((29, true));
     assert!(errors.is_err());
-    assert_eq!(".: struct_args: a=29, b=true", errors.to_string());
+    assert_eq!(".: struct_many_args: a=29, b=true", errors.to_string());
+}
+
+#[test]
+fn struct_generics() {
+    #[derive(Validate)]
+    #[validate(
+        args(a: &'arg u64),
+        custom(function = validate_struct_generics, args(a))
+    )]
+    struct StructGenerics<'a, T: Copy, const N: usize> {
+        x: &'a u8,
+        y: T,
+        z: [u8; N],
+    }
+
+    fn validate_struct_generics<'a, T: Copy, const N: usize>(
+        value: &StructGenerics<'a, T, N>,
+        a: &u64,
+    ) -> ValidationErrors {
+        ValidationErrors::error(Error::with_code("struct_args").and_param("a", a.to_string()))
+    }
+
+    let instance = StructGenerics {
+        x: &0,
+        y: false,
+        z: [0; 10],
+    };
+    let errors = instance.validate_args((&29,));
+    assert!(errors.is_err());
+    assert_eq!(".: struct_args: a=29", errors.to_string());
 }
 
 #[test]

@@ -639,14 +639,14 @@ pub trait Validate {
 }
 
 /// Trait describing types that can be validated with arguments.
-pub trait ValidateArgs {
+pub trait ValidateArgs<'v_a> {
     type Args;
     fn validate_args(&self, args: Self::Args) -> ValidationErrors;
 }
 
-impl<T> Validate for T
+impl<'a, T> Validate for T
 where
-    T: ValidateArgs<Args = ()>,
+    T: ValidateArgs<'a, Args = ()>,
 {
     fn validate(&self) -> ValidationErrors {
         self.validate_args(())
