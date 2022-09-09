@@ -17,8 +17,8 @@ fn main() {
         ValidationErrors::error_if(*age > 150, || {
             Error::with_code("range")
                 .and_message("Number not in range")
-                .and_param("max", "150".into())
-                .and_param("value", age.to_string())
+                .and_param("max", 150)
+                .and_param("value", *age)
         })
     }
 
@@ -47,8 +47,8 @@ fn main() {
             .and_error_if(username.len() < 6, || {
                 Error::with_code("byte_length")
                     .and_message("String byte length is not allowed")
-                    .and_param("min", "6".into())
-                    .and_param("value", username.len().to_string())
+                    .and_param("min", 6)
+                    .and_param("value", username.len())
             })
             .and_error_if(!username.is_ascii(), || {
                 Error::with_code("ascii").and_message("String contains non-ASCII characters")
@@ -371,8 +371,8 @@ fn main() {
         ValidationErrors::error_if(len > max_char_length, || {
             Error::with_code("length")
                 .and_message("Illegal string length")
-                .and_param("max", max_char_length.to_string())
-                .and_param("value", len.to_string())
+                .and_param("max", max_char_length)
+                .and_param("value", len)
         })
     }
 
@@ -381,8 +381,8 @@ fn main() {
         ValidationErrors::error_if(images.len() > limit, || {
             Error::with_code("length")
                 .and_message("Illegal list length")
-                .and_param("max", limit.to_string())
-                .and_param("value", images.len().to_string())
+                .and_param("max", limit)
+                .and_param("value", images.len())
         })
     }
 

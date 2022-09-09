@@ -20,7 +20,7 @@ pub struct Error {
     message: Option<Cow<'static, str>>,
     /// A list of params that provide further context about the error, e.g. for
     /// code "range": "min", "max", "value".
-    params: BTreeMap<Cow<'static, str>, String>,
+    params: BTreeMap<Cow<'static, str>, ParamValue>,
 }
 
 impl Error {
@@ -53,11 +53,99 @@ impl Error {
     /// equal) is added multiple times, the last value will be preserved.
     /// ```
     /// # use not_so_fast::*;
-    /// let error = Error::with_code("length").and_param("max", "100".into());
+    /// let error = Error::with_code("length").and_param("max", 100);
     /// ```
-    pub fn and_param(mut self, key: impl Into<Cow<'static, str>>, value: String) -> Self {
-        self.params.insert(key.into(), value);
+    pub fn and_param(
+        mut self,
+        key: impl Into<Cow<'static, str>>,
+        value: impl Into<ParamValue>,
+    ) -> Self {
+        self.params.insert(key.into(), value.into());
         self
+    }
+}
+
+/// Parameter value stored in [Error].
+#[derive(Debug)]
+pub enum ParamValue {
+    Bool(bool),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    I128(i128),
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+    U128(u128),
+    Usize(usize),
+    F32(f32),
+    F64(f64),
+    Char(char),
+    String(Cow<'static, str>),
+    Raw(Cow<'static, str>),
+}
+
+impl std::fmt::Display for ParamValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use ParamValue::*;
+        match self {
+            Bool(value) => write!(f, "{}", value),
+            I8(value) => write!(f, "{}", value),
+            I16(value) => write!(f, "{}", value),
+            I32(value) => write!(f, "{}", value),
+            I64(value) => write!(f, "{}", value),
+            I128(value) => write!(f, "{}", value),
+            U8(value) => write!(f, "{}", value),
+            U16(value) => write!(f, "{}", value),
+            U32(value) => write!(f, "{}", value),
+            U64(value) => write!(f, "{}", value),
+            U128(value) => write!(f, "{}", value),
+            Usize(value) => write!(f, "{}", value),
+            F32(value) => write!(f, "{}", value),
+            F64(value) => write!(f, "{}", value),
+            Char(value) => write!(f, "'{}'", value.escape_default()),
+            String(value) => write!(f, "\"{}\"", value.escape_default()),
+            Raw(value) => write!(f, "{}", value),
+        }
+    }
+}
+
+macro_rules! impl_param_conversion {
+    ($ty:ty, $variant:ident) => {
+        impl From<$ty> for ParamValue {
+            fn from(value: $ty) -> Self {
+                Self::$variant(value)
+            }
+        }
+    };
+}
+impl_param_conversion!(bool, Bool);
+impl_param_conversion!(i8, I8);
+impl_param_conversion!(i16, I16);
+impl_param_conversion!(i32, I32);
+impl_param_conversion!(i64, I64);
+impl_param_conversion!(i128, I128);
+impl_param_conversion!(u8, U8);
+impl_param_conversion!(u16, U16);
+impl_param_conversion!(u32, U32);
+impl_param_conversion!(u64, U64);
+impl_param_conversion!(u128, U128);
+impl_param_conversion!(usize, Usize);
+impl_param_conversion!(f32, F32);
+impl_param_conversion!(f64, F64);
+impl_param_conversion!(char, Char);
+
+impl From<&'static str> for ParamValue {
+    fn from(value: &'static str) -> Self {
+        Self::String(value.into())
+    }
+}
+
+impl From<String> for ParamValue {
+    fn from(value: String) -> Self {
+        Self::String(value.into())
     }
 }
 
@@ -262,7 +350,7 @@ impl ValidationErrors {
     /// let errors_iter = [3, 5, 15]
     ///     .into_iter()
     ///     .filter_map(|divisor| (value % divisor == 0).then(|| {
-    ///         Error::with_code("divisible").and_param("by", divisor.to_string())
+    ///         Error::with_code("divisible").and_param("by", divisor)
     ///     }));
     ///
     /// let errors = ValidationErrors::errors(errors_iter);
@@ -286,7 +374,7 @@ impl ValidationErrors {
     /// let errors_iter = [3, 5, 15]
     ///     .into_iter()
     ///     .filter_map(|divisor| (value % divisor == 0).then(|| {
-    ///         Error::with_code("divisible").and_param("by", divisor.to_string())
+    ///         Error::with_code("divisible").and_param("by", divisor)
     ///     }));
     ///
     /// let errors = ValidationErrors::ok().and_errors(errors_iter);
@@ -717,7 +805,7 @@ fn fmt_error(error: &Error, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         }
         f.write_str(param.0)?;
         f.write_str("=")?;
-        f.write_str(param.1)?;
+        write!(f, "{}", param.1)?;
     }
     Ok(())
 }

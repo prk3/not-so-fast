@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate pretty_assertions;
+
 use not_so_fast::*;
 
 #[test]
@@ -15,8 +18,8 @@ fn user() {
                 ValidationErrors::error_if(user.name.len() > 5, || {
                     Error::with_code("length")
                         .and_message("Illegal string length")
-                        .and_param("max", "5".into())
-                        .and_param("value", user.name.len().to_string())
+                        .and_param("max", 5)
+                        .and_param("value", user.name.len())
                 }),
             )
             .and_field(
@@ -24,8 +27,8 @@ fn user() {
                 ValidationErrors::error_if(user.age < 3, || {
                     Error::with_code("range")
                         .and_message("Number not in range")
-                        .and_param("min", "3".into())
-                        .and_param("value", user.age.to_string())
+                        .and_param("min", 3)
+                        .and_param("value", user.age)
                 }),
             )
             .and_field(
@@ -34,15 +37,15 @@ fn user() {
                     .and_error_if(user.pet_names.len() > 2, || {
                         Error::with_code("length")
                             .and_message("Illegal array length")
-                            .and_param("max", "2".into())
-                            .and_param("value", user.pet_names.len().to_string())
+                            .and_param("max", 2)
+                            .and_param("value", user.pet_names.len())
                     })
                     .and_items(user.pet_names.iter(), |_, item| {
                         ValidationErrors::error_if(item.len() > 10, || {
                             Error::with_code("length")
                                 .and_message("Illegal string length")
-                                .and_param("max", "10".into())
-                                .and_param("value", item.len().to_string())
+                                .and_param("max", 10)
+                                .and_param("value", item.len())
                         })
                     }),
             )

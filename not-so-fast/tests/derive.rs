@@ -1,5 +1,8 @@
 #![allow(dead_code, unused_variables)]
 
+#[macro_use]
+extern crate pretty_assertions;
+
 use not_so_fast::*;
 
 #[test]
@@ -34,7 +37,7 @@ fn struct_one_arg() {
     struct Nested;
 
     fn validate_struct_one_arg(value: &StructOneArg, a: u64) -> ValidationErrors {
-        ValidationErrors::error(Error::with_code("struct_one_arg").and_param("a", a.to_string()))
+        ValidationErrors::error(Error::with_code("struct_one_arg").and_param("a", a))
     }
 
     let errors = StructOneArg(Nested).validate_args((29,));
@@ -58,8 +61,8 @@ fn struct_many_args() {
     fn validate_struct_many_args(value: &StructManyArgs, a: u64, b: bool) -> ValidationErrors {
         ValidationErrors::error(
             Error::with_code("struct_many_args")
-                .and_param("a", a.to_string())
-                .and_param("b", b.to_string()),
+                .and_param("a", a)
+                .and_param("b", b),
         )
     }
 
@@ -75,21 +78,23 @@ fn struct_generics() {
         args(a: &'arg u64),
         custom(function = validate_struct_generics, args(a))
     )]
-    struct StructGenerics<'a, T: Copy, const N: usize> {
-        x: &'a u8,
+    struct StructGenerics<'a, 'b: 'a, T: Copy + 'b, const N: usize> {
+        a: &'a u8,
+        b: &'b u8,
         y: T,
         z: [u8; N],
     }
 
-    fn validate_struct_generics<'a, T: Copy, const N: usize>(
-        value: &StructGenerics<'a, T, N>,
+    fn validate_struct_generics<'a, 'b: 'a, T: Copy + 'b, const N: usize>(
+        value: &StructGenerics<'a, 'b, T, N>,
         a: &u64,
     ) -> ValidationErrors {
-        ValidationErrors::error(Error::with_code("struct_args").and_param("a", a.to_string()))
+        ValidationErrors::error(Error::with_code("struct_args").and_param("a", *a))
     }
 
     let instance = StructGenerics {
-        x: &0,
+        a: &0,
+        b: &0,
         y: false,
         z: [0; 10],
     };
@@ -152,11 +157,11 @@ fn enum_different_variants() {
     }
 
     fn validate_string(value: &String, a: u64) -> ValidationErrors {
-        ValidationErrors::error(Error::with_code("s").and_param("a", a.to_string()))
+        ValidationErrors::error(Error::with_code("s").and_param("a", a))
     }
 
     fn validate_enum(value: &Enum, b: bool) -> ValidationErrors {
-        ValidationErrors::error(Error::with_code("e").and_param("b", b.to_string()))
+        ValidationErrors::error(Error::with_code("e").and_param("b", b))
     }
 
     assert_eq!(

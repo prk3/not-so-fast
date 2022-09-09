@@ -158,14 +158,14 @@ fn main() {
     // or be literals or constants.
 
     // fn validate_user(_user: &User, a: u64) -> ValidationErrors {
-    //     ValidationErrors::error(Error::with_code("user").and_param("a", a.to_string()))
+    //     ValidationErrors::error(Error::with_code("user").and_param("a", a))
     // }
 
     // fn validate_name(_name: &String, a: u64, b: bool) -> ValidationErrors {
     //     ValidationErrors::error(
     //         Error::with_code("name")
-    //             .and_param("a", a.to_string())
-    //             .and_param("b", b.to_string()),
+    //             .and_param("a", a)
+    //             .and_param("b", b),
     //     )
     // }
 
