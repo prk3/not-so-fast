@@ -76,7 +76,7 @@ fn main() {
 
     // not-so-fast allows us to validate lists of items. The following code
     // constructs an error for every float that's not between 0.0 and 1.0,
-    // in the 3-elements-long list.
+    // in a 3-elements-long list.
 
     fn validate_color_rgb(numbers: &[f32; 3]) -> ValidationErrors {
         ValidationErrors::ok()
@@ -146,6 +146,7 @@ fn main() {
     // What is we wanted to validate an entire struct? Methods `field` and
     // `and_field` allow us to do just that.
 
+    #[derive(Clone)]
     struct User {
         username: String,
         age: u32,
@@ -251,7 +252,7 @@ fn main() {
         ValidationErrors::fields(order.iter(), |id, product| {
             ValidationErrors::error_if(id != &product.id, || {
                 Error::with_code("product_id_invariant")
-                    .and_message("Product ID key in order object does not match product items's ID")
+                    .and_message("Product ID key in order object does not match product's ID")
             })
         })
     }
@@ -464,4 +465,86 @@ fn main() {
 
     // `merge` method not only moves all value errors from the error argument
     // to `self`, but also recursively combines field/item errors.
+
+    // - Traits -
+
+    // Until now we've been writing stand-alone validation functions. To
+    // associate a validation function with the validated type, implement
+    // `ValidateArgs` for that type.
+
+    impl<'v_a> ValidateArgs<'v_a> for User {
+        type Args = ();
+
+        fn validate_args(&self, (): Self::Args) -> ValidationErrors {
+            validate_user(self)
+        }
+    }
+
+    // Associated type `Args` is a tuple with validation parameters. In the
+    // example above the tuple has zero elements, since user validation
+    // does not expect any arguments.
+
+    // `Profile` does have validation parameters, so the implementation of
+    // `ValidateArgs` trait would look like this.
+
+    impl<'v_a> ValidateArgs<'v_a> for Profile {
+        type Args = (usize, bool);
+
+        fn validate_args(&self, (max_bio_len, multi_image): Self::Args) -> ValidationErrors {
+            validate_profile(self, max_bio_len, multi_image)
+        }
+    }
+
+    // The generic lifetime 'v_a can be used to pass expensive-to-copy argument
+    // to the validator by reference.
+
+    struct Shape(String);
+
+    impl<'v_a> ValidateArgs<'v_a> for Shape {
+        type Args = (&'v_a [&'v_a str],);
+
+        fn validate_args(&self, (legal_shapes,): Self::Args) -> ValidationErrors {
+            ValidationErrors::error_if(!legal_shapes.contains(&self.0.as_ref()), || {
+                Error::with_code("illegal_shape")
+            })
+        }
+    }
+
+    // To validate data through `ValidateArgs` implementation, just call
+    // `validate_args` method providing necessary arguments.
+
+    const LEGAL_SHAPES_2D: [&str; 3] = ["triangle", "square", "circle"];
+    const LEGAL_SHAPES_3D: [&str; 3] = ["sphere", "magenta", "yellow"];
+
+    assert!(Shape("square".into())
+        .validate_args((&LEGAL_SHAPES_2D[..],))
+        .is_ok());
+
+    assert!(Shape("square".into())
+        .validate_args((&LEGAL_SHAPES_3D[..],))
+        .is_err());
+
+    assert!(ok_user.validate_args(()).is_ok());
+
+    // Because validators usually aren't parameterized, types implementing
+    // `ValidateArgs<Args=()>` automatically implement simpler `Validate` trait.
+    // Using `Validate` in trait bounds is preferred, as it shortens your code.
+
+    fn clone_and_validate_1<'a, T: Clone + ValidateArgs<'a, Args = ()>>(
+        value: &T,
+    ) -> Result<T, ValidationErrors> {
+        let clone: T = value.clone();
+        clone.validate_args(()).result()?;
+        Ok(clone)
+    }
+
+    assert!(clone_and_validate_1(&ok_user).is_ok());
+
+    fn clone_and_validate_2<T: Clone + Validate>(value: &T) -> Result<T, ValidationErrors> {
+        let clone: T = value.clone();
+        clone.validate().result()?;
+        Ok(clone)
+    }
+
+    assert!(clone_and_validate_2(&bad_user).is_err());
 }
