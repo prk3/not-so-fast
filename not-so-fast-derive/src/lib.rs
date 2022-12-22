@@ -211,6 +211,171 @@ fn validate_field(path: TokenStream2, argument: FieldValidateArgument) -> TokenS
         Email(_) => {
             quote! { .merge(::not_so_fast::validators::email::validate_email(#path)) }
         }
+        Length(_, LengthArguments { min, max, equal }) => match (&min, &max, &equal) {
+            (Some(LengthArgument { value: min, .. }), None, None) => quote! {
+                .merge({
+                    let notsofast_min = #min;
+                    let notsofast_length = (#path).len();
+                    ::not_so_fast::ValidationErrors::error_if(
+                        notsofast_length < notsofast_min,
+                        || ::not_so_fast::Error::with_code("length")
+                            .and_message("Invalid length")
+                            .and_param("value", notsofast_length)
+                            .and_param("min", notsofast_min)
+                    )
+                })
+            },
+            (None, Some(LengthArgument { value: max, .. }), None) => quote! {
+                .merge({
+                    let notsofast_max = #max;
+                    let notsofast_length = (#path).len();
+                    ::not_so_fast::ValidationErrors::error_if(
+                        notsofast_length > notsofast_max,
+                        || ::not_so_fast::Error::with_code("length")
+                            .and_message("Invalid length")
+                            .and_param("value", notsofast_length)
+                            .and_param("max", notsofast_max)
+                    )
+                })
+            },
+            (
+                Some(LengthArgument { value: min, .. }),
+                Some(LengthArgument { value: max, .. }),
+                None,
+            ) => quote! {
+                .merge({
+                    let notsofast_min = #min;
+                    let notsofast_max = #max;
+                    let notsofast_length = (#path).len();
+                    ::not_so_fast::ValidationErrors::error_if(
+                        notsofast_length < notsofast_min || notsofast_length > notsofast_max,
+                        || ::not_so_fast::Error::with_code("length")
+                            .and_message("Invalid length")
+                            .and_param("value", notsofast_length)
+                            .and_param("min", notsofast_min)
+                            .and_param("max", notsofast_max)
+                    )
+                })
+            },
+            (None, None, Some(LengthArgument { value: equal, .. })) => quote! {
+                .merge({
+                    let notsofast_equal = #equal;
+                    let notsofast_length = (#path).len();
+                    ::not_so_fast::ValidationErrors::error_if(
+                        notsofast_length != notsofast_equal,
+                        || ::not_so_fast::Error::with_code("length")
+                            .and_message("Invalid length")
+                            .and_param("value", notsofast_length)
+                            .and_param("equal", notsofast_equal)
+                    )
+                })
+            },
+            _ => unreachable!(),
+        },
+        CharLength(_, LengthArguments { min, max, equal }) => match (&min, &max, &equal) {
+            (Some(LengthArgument { value: min, .. }), None, None) => quote! {
+                .merge({
+                    let notsofast_min = #min;
+                    let notsofast_char_length = (#path).chars().count();
+                    ::not_so_fast::ValidationErrors::error_if(
+                        notsofast_char_length < notsofast_min,
+                        || ::not_so_fast::Error::with_code("char_length")
+                            .and_message("Invalid character length")
+                            .and_param("value", notsofast_char_length)
+                            .and_param("min", notsofast_min)
+                    )
+                })
+            },
+            (None, Some(LengthArgument { value: max, .. }), None) => quote! {
+                .merge({
+                    let notsofast_max = #max;
+                    let notsofast_char_length = (#path).chars().count();
+                    ::not_so_fast::ValidationErrors::error_if(
+                        notsofast_char_length > notsofast_max,
+                        || ::not_so_fast::Error::with_code("char_length")
+                            .and_message("Invalid character length")
+                            .and_param("value", notsofast_char_length)
+                            .and_param("max", notsofast_max)
+                    )
+                })
+            },
+            (
+                Some(LengthArgument { value: min, .. }),
+                Some(LengthArgument { value: max, .. }),
+                None,
+            ) => quote! {
+                .merge({
+                    let notsofast_min = #min;
+                    let notsofast_max = #max;
+                    let notsofast_char_length = (#path).chars().count();
+                    ::not_so_fast::ValidationErrors::error_if(
+                        notsofast_char_length < notsofast_min || notsofast_char_length > notsofast_max,
+                        || ::not_so_fast::Error::with_code("char_length")
+                            .and_message("Invalid character length")
+                            .and_param("value", notsofast_char_length)
+                            .and_param("min", notsofast_min)
+                            .and_param("max", notsofast_max)
+                    )
+                })
+            },
+            (None, None, Some(LengthArgument { value: equal, .. })) => quote! {
+                .merge({
+                    let notsofast_equal = #equal;
+                    let notsofast_char_length = (#path).chars().count();
+                    ::not_so_fast::ValidationErrors::error_if(
+                        notsofast_char_length != notsofast_equal,
+                        || ::not_so_fast::Error::with_code("char_length")
+                            .and_message("Invalid character length")
+                            .and_param("value", notsofast_char_length)
+                            .and_param("equal", notsofast_equal)
+                    )
+                })
+            },
+            _ => unreachable!(),
+        },
+        Range(_, RangeArguments { min, max }) => match (min, max) {
+            (Some(RangeArgument { value: min, .. }), None) => quote! {
+                .merge({
+                    let notsofast_min = #min;
+                    ::not_so_fast::ValidationErrors::error_if(
+                        *(#path) < notsofast_min,
+                        || ::not_so_fast::Error::with_code("range")
+                            .and_message("Number not in range")
+                            .and_param("value", *(#path))
+                            .and_param("min", notsofast_min)
+                    )
+                })
+            },
+            (None, Some(RangeArgument { value: max, .. })) => quote! {
+                .merge({
+                    let notsofast_max = #max;
+                    ::not_so_fast::ValidationErrors::error_if(
+                        *(#path) > notsofast_max,
+                        || ::not_so_fast::Error::with_code("range")
+                            .and_message("Number not in range")
+                            .and_param("value", *(#path))
+                            .and_param("max", notsofast_max)
+                    )
+                })
+            },
+            (Some(RangeArgument { value: min, .. }), Some(RangeArgument { value: max, .. })) => {
+                quote! {
+                    .merge({
+                        let notsofast_min = #min;
+                        let notsofast_max = #max;
+                        ::not_so_fast::ValidationErrors::error_if(
+                            *(#path) < notsofast_min || *(#path) > notsofast_max,
+                            || ::not_so_fast::Error::with_code("range")
+                                .and_message("Number not in range")
+                                .and_param("value", *(#path))
+                                .and_param("min", notsofast_min)
+                                .and_param("max", notsofast_max)
+                        )
+                    })
+                }
+            }
+            _ => unreachable!(),
+        },
         Custom(_, arguments) => {
             let function = arguments.function;
             let args = arguments.args;

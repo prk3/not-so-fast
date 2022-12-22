@@ -363,24 +363,10 @@ pub enum FieldValidateArgument {
     Nested(Ident, NestedArguments),
     Email(Ident),
     Url(Ident),
-    Length {
-        min: Option<LengthArgument>,
-        max: Option<LengthArgument>,
-        equal: Option<LengthArgument>,
-    },
-    ByteLength {
-        min: Option<LengthArgument>,
-        max: Option<LengthArgument>,
-        equal: Option<LengthArgument>,
-    },
-    Range {
-        min: Option<LengthArgument>,
-        max: Option<LengthArgument>,
-        equal: Option<LengthArgument>,
-    },
-    Contains {
-        pattern: String,
-    },
+    Length(Ident, LengthArguments),
+    CharLength(Ident, LengthArguments),
+    Range(Ident, RangeArguments),
+    Contains { pattern: String },
 }
 
 impl Parse for FieldValidateArgument {
@@ -390,18 +376,230 @@ impl Parse for FieldValidateArgument {
             "email" => Ok(Self::Email(ident)),
             "custom" => Ok(Self::Custom(ident, input.parse()?)),
             "nested" => Ok(Self::Nested(ident, input.parse()?)),
+            "length" => Ok(Self::Length(ident, input.parse()?)),
+            "char_length" => Ok(Self::CharLength(ident, input.parse()?)),
+            "range" => Ok(Self::Range(ident, input.parse()?)),
             _ => Err(syn::Error::new_spanned(
                 ident,
-                "Unknown argument. Expected \"email\"",
+                "Unknown argument. Expected \"email\", TODO",
             )),
         }
+    }
+}
+
+/// - `(min = 10)`
+/// - `(max = 90)`
+/// - `(min = 10, max = 90)`
+/// - `(equals = 20)`
+/// - `(min = path::to::VAR_OR_CONST)`
+#[derive(Debug)]
+pub struct LengthArguments {
+    pub min: Option<LengthArgument>,
+    pub max: Option<LengthArgument>,
+    pub equal: Option<LengthArgument>,
+}
+
+impl Parse for LengthArguments {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let mut min = None;
+        let mut max = None;
+        let mut equal = None;
+
+        let content;
+        let _ = parenthesized!(content in input);
+        let content_span_start = content.span();
+        let args = Punctuated::<LengthArgument, Token![,]>::parse_terminated(&content)?;
+
+        for arg in args {
+            if arg.ident == "min" {
+                if min.is_none() {
+                    min = Some(arg);
+                } else {
+                    return Err(syn::Error::new(arg.ident.span(), "min already declared"));
+                }
+            } else if arg.ident == "max" {
+                if max.is_none() {
+                    max = Some(arg);
+                } else {
+                    return Err(syn::Error::new(arg.ident.span(), "max already declared"));
+                }
+            } else if arg.ident == "equal" {
+                if equal.is_none() {
+                    equal = Some(arg);
+                } else {
+                    return Err(syn::Error::new(arg.ident.span(), "equal already declared"));
+                }
+            } else {
+                return Err(syn::Error::new(arg.ident.span(), "unknown length argument"));
+            }
+        }
+
+        let min_or_max = min.is_some() || max.is_some();
+
+        if min_or_max && equal.is_some() {
+            return Err(syn::Error::new(
+                content_span_start,
+                "invalid argument combination: specify either min/max or equal",
+            ));
+        }
+        if !min_or_max && equal.is_none() {
+            return Err(syn::Error::new(
+                content_span_start,
+                "specify min, max, or equal",
+            ));
+        }
+
+        Ok(Self { min, max, equal })
+    }
+}
+
+/// - `min = 20`
+/// - `max = path::to::VAR_OR_CONST`
+#[derive(Debug)]
+pub struct LengthArgument {
+    pub ident: Ident,
+    pub value: LengthArgumentValue,
+}
+
+impl Parse for LengthArgument {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let ident: Ident = input.parse()?;
+        let _: Token![=] = input.parse()?;
+        let value: LengthArgumentValue = input.parse()?;
+        Ok(Self { ident, value })
     }
 }
 
 /// - `20`
 /// - `path::to::VAR_OR_CONST`
 #[derive(Debug)]
-enum LengthArgument {
+pub enum LengthArgumentValue {
     LitInt(LitInt),
     Path(Path),
+}
+
+impl Parse for LengthArgumentValue {
+    fn parse(input: ParseStream) -> Result<Self> {
+        if input.peek(LitInt) {
+            return Ok(Self::LitInt(input.parse()?));
+        }
+        if let Ok(path) = input.parse::<Path>() {
+            return Ok(Self::Path(path));
+        }
+        Err(syn::Error::new(
+            input.span(),
+            "Expected integer literal or a path to an integer",
+        ))
+    }
+}
+
+impl ToTokens for LengthArgumentValue {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            Self::LitInt(lit) => lit.to_tokens(tokens),
+            Self::Path(path) => path.to_tokens(tokens),
+        }
+    }
+}
+
+/// - (min = 10)
+/// - (max = 90)
+/// - (min = 10, max = 90)
+/// - (min = path::to::VAR_OR_CONST)
+#[derive(Debug)]
+pub struct RangeArguments {
+    pub min: Option<RangeArgument>,
+    pub max: Option<RangeArgument>,
+}
+
+impl Parse for RangeArguments {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let mut min = None;
+        let mut max = None;
+
+        let content;
+        let _ = parenthesized!(content in input);
+        let content_span_start = content.span();
+        let args = Punctuated::<RangeArgument, Token![,]>::parse_terminated(&content)?;
+
+        for arg in args {
+            if arg.ident == "min" {
+                if min.is_none() {
+                    min = Some(arg);
+                } else {
+                    return Err(syn::Error::new(arg.ident.span(), "min already declared"));
+                }
+            } else if arg.ident == "max" {
+                if max.is_none() {
+                    max = Some(arg);
+                } else {
+                    return Err(syn::Error::new(arg.ident.span(), "max already declared"));
+                }
+            } else {
+                return Err(syn::Error::new(arg.ident.span(), "unknown range argument"));
+            }
+        }
+
+        if min.is_none() && max.is_none() {
+            return Err(syn::Error::new(content_span_start, "specify min or max"));
+        }
+
+        Ok(Self { min, max })
+    }
+}
+
+/// - `min = 20`
+/// - `min = 20.0`
+/// - `max = path::to::VAR_OR_CONST`
+#[derive(Debug)]
+pub struct RangeArgument {
+    pub ident: Ident,
+    pub value: RangeArgumentValue,
+}
+
+impl Parse for RangeArgument {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let ident: Ident = input.parse()?;
+        let _: Token![=] = input.parse()?;
+        let value: RangeArgumentValue = input.parse()?;
+        Ok(Self { ident, value })
+    }
+}
+
+/// - `20`
+/// - `20.0`
+/// - `path::to::VAR_OR_CONST`
+#[derive(Debug)]
+pub enum RangeArgumentValue {
+    LitInt(LitInt),
+    LitFloat(LitFloat),
+    Path(Path),
+}
+
+impl Parse for RangeArgumentValue {
+    fn parse(input: ParseStream) -> Result<Self> {
+        if input.peek(LitInt) {
+            return Ok(Self::LitInt(input.parse()?));
+        }
+        if input.peek(LitFloat) {
+            return Ok(Self::LitFloat(input.parse()?));
+        }
+        if let Ok(path) = input.parse::<Path>() {
+            return Ok(Self::Path(path));
+        }
+        Err(syn::Error::new(
+            input.span(),
+            "Expected integer literal, float literal, or a path to an integer or float",
+        ))
+    }
+}
+
+impl ToTokens for RangeArgumentValue {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            Self::LitInt(lit) => lit.to_tokens(tokens),
+            Self::LitFloat(lit) => lit.to_tokens(tokens),
+            Self::Path(path) => path.to_tokens(tokens),
+        }
+    }
 }
