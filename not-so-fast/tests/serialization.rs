@@ -5,38 +5,41 @@ use not_so_fast::*;
 
 #[test]
 fn simple() {
-    let errors = ValidationErrors::ok()
+    let errors = ValidationNode::ok()
         .and_error(
-            Error::with_code("one")
+            ValidationError::with_code("one")
                 .and_message("Test message one")
                 .and_param("param1", "value1"),
         )
         .and_field(
             "field_a",
-            ValidationErrors::ok()
-                .and_error(Error::with_code("two"))
-                .and_error(Error::with_code("three")),
+            ValidationNode::ok()
+                .and_error(ValidationError::with_code("two"))
+                .and_error(ValidationError::with_code("three")),
         )
         .and_field(
             "field_b",
-            ValidationErrors::ok()
-                .and_item(0, ValidationErrors::error(Error::with_code("four")))
-                .and_item(1, ValidationErrors::error(Error::with_code("five")))
-                .and_item(1, ValidationErrors::error(Error::with_code("six"))),
+            ValidationNode::ok()
+                .and_item(0, ValidationNode::error(ValidationError::with_code("four")))
+                .and_item(1, ValidationNode::error(ValidationError::with_code("five")))
+                .and_item(1, ValidationNode::error(ValidationError::with_code("six"))),
         )
         .and_field(
             "field_c_~!@#$%^&*()_+",
-            ValidationErrors::error(Error::with_code("seven")),
+            ValidationNode::error(ValidationError::with_code("seven")),
         )
-        .and_item(0, ValidationErrors::error(Error::with_code("eight")))
+        .and_item(
+            0,
+            ValidationNode::error(ValidationError::with_code("eight")),
+        )
         .and_item(
             1,
-            ValidationErrors::item(2, ValidationErrors::error(Error::with_code("nine"))),
+            ValidationNode::item(2, ValidationNode::error(ValidationError::with_code("nine"))),
         )
         .and_item(
             2,
-            ValidationErrors::error(
-                Error::with_code("c")
+            ValidationNode::error(
+                ValidationError::with_code("c")
                     .and_param("p01", true)
                     .and_param("p02", 1u8)
                     .and_param("p03", 1u16)

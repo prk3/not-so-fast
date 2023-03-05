@@ -1,4 +1,5 @@
 use not_so_fast::*;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque};
 
 const USIZE_8: usize = 8;
 const USIZE_50: usize = 50;
@@ -28,6 +29,24 @@ struct S<'a> {
 
     #[validate(length(min = self::USIZE_8, max = self::USIZE_50))]
     h: String,
+
+    #[validate(length(min = 1))]
+    i: HashMap<u8, u8>,
+
+    #[validate(length(min = 1))]
+    j: HashSet<u8>,
+
+    #[validate(length(min = 1))]
+    k: BTreeMap<u8, u8>,
+
+    #[validate(length(min = 1))]
+    l: BTreeSet<u8>,
+
+    #[validate(length(min = 1))]
+    m: LinkedList<u8>,
+
+    #[validate(length(min = 1))]
+    n: VecDeque<u8>,
 }
 
 impl Default for S<'static> {
@@ -41,6 +60,12 @@ impl Default for S<'static> {
             f: vec![0; 10],
             g: &[0; 20],
             h: "n".repeat(10),
+            i: [(0, 0)].into_iter().collect(),
+            j: [0].into_iter().collect(),
+            k: [(0, 0)].into_iter().collect(),
+            l: [0].into_iter().collect(),
+            m: [0].into_iter().collect(),
+            n: [0].into_iter().collect(),
         }
     }
 }
@@ -276,6 +301,46 @@ fn path_arg() {
     .is_ok());
     assert!(S {
         h: "a".repeat(51),
+        ..Default::default()
+    }
+    .validate()
+    .is_err());
+}
+
+#[test]
+fn less_common_types() {
+    assert!(S {
+        i: [].into_iter().collect(),
+        ..Default::default()
+    }
+    .validate()
+    .is_err());
+    assert!(S {
+        j: [].into_iter().collect(),
+        ..Default::default()
+    }
+    .validate()
+    .is_err());
+    assert!(S {
+        k: [].into_iter().collect(),
+        ..Default::default()
+    }
+    .validate()
+    .is_err());
+    assert!(S {
+        l: [].into_iter().collect(),
+        ..Default::default()
+    }
+    .validate()
+    .is_err());
+    assert!(S {
+        m: [].into_iter().collect(),
+        ..Default::default()
+    }
+    .validate()
+    .is_err());
+    assert!(S {
+        n: [].into_iter().collect(),
         ..Default::default()
     }
     .validate()

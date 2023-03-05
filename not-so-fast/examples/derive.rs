@@ -38,6 +38,43 @@ fn main() {
 
     // - Vec -
 
+    // - Nested -
+
+    // If field's type also derives `Validate`, or has custom implementation of
+    // `ValidateArgs` trait, we can validate that field like this:
+
+    #[derive(Validate)]
+    struct Field(#[validate(range(max = 10))] i32);
+
+    #[derive(Validate)]
+    struct StructWithNestedField {
+        #[validate] // or #[validate(nested)]
+        field: Field,
+    }
+
+    assert!(StructWithNestedField { field: Field(15) }
+        .validate()
+        .is_err());
+
+    // If field's `ValidateArgs` implementation has non-empty Args, you'll have
+    // to provide values for these parameters with `args` attribute.
+
+    #[derive(Validate)]
+    #[validate(args(bottom: i32, top: i32))]
+    struct FieldWithArgs(#[validate(range(min=bottom, max=top))] i32);
+
+    #[derive(Validate)]
+    struct StructWithNestedField2 {
+        #[validate(nested(args(-100, 100)))]
+        field: FieldWithArgs,
+    }
+
+    assert!(StructWithNestedField2 {
+        field: FieldWithArgs(500)
+    }
+    .validate()
+    .is_err());
+
     // - Custom -
 
     // To cover all your validation needs, you'll likely have to write custom
@@ -50,8 +87,10 @@ fn main() {
         name: String,
     }
 
-    fn validate_name(name: &String) -> ValidationErrors {
-        ValidationErrors::error_if(name.starts_with("_"), || Error::with_code("underscore"))
+    fn validate_name(name: &str) -> ValidationNode {
+        ValidationNode::error_if(name.starts_with("_"), || {
+            ValidationError::with_code("underscore")
+        })
     }
 
     assert!(StructWithCustom { name: "n".into() }.validate().is_ok());
@@ -69,8 +108,10 @@ fn main() {
         age: usize,
     }
 
-    fn validate_struct(s: &StructWithCustom2) -> ValidationErrors {
-        ValidationErrors::error_if(s.name.len() > s.age, || Error::with_code("name_invariant"))
+    fn validate_struct(s: &StructWithCustom2) -> ValidationNode {
+        ValidationNode::error_if(s.name.len() > s.age, || {
+            ValidationError::with_code("name_invariant")
+        })
     }
 
     assert!(StructWithCustom2 {
@@ -87,85 +128,79 @@ fn main() {
     .validate()
     .is_err());
 
-    // - Nested -
-
-    // If field's type derives `Validate`, or has custom implementation of
-    // `ValidateArgs` trait, we can validate that field with `nested` argument.
+    // Custom validation functions can have additional parameters, which you
+    // are able to specify with `args` attribute.
 
     #[derive(Validate)]
-    struct Field;
-
-    #[derive(Validate)]
-    struct StructWithNestedField {
-        #[validate(nested)]
-        field: Field,
+    struct StructWithCustom3 {
+        #[validate(custom(function = validate_bio, args(1000)))]
+        bio: String,
     }
 
-    assert!(StructWithNestedField { field: Field }.validate().is_ok());
+    fn validate_bio(bio: &str, word_count: usize) -> ValidationNode {
+        ValidationNode::error_if(bio.split_whitespace().count() > word_count, || {
+            ValidationError::with_code("word_count").and_param("max", word_count)
+        })
+    }
 
     // - Parametrization -
 
-    // If your `custom` or `nested` validators have parameters, you can specify
-    // them with `args` macro.
+    // Sometimes the same type must be validated differently depending on the
+    // context. Maybe a photo gallery attached to a blog post can have more
+    // entries than a gallery attached to a comment. Parameterization allows us
+    // to pass this sort of information to validation functions.
 
-    struct StructWithParamArgs {
-        field:
-        name: String,
+    // To express that a type has validation parameters, annotate it with
+    // `args` attribute.
 
-    }
+    #[derive(Validate)]
+    #[validate(args(x: u64, y: i32, z: char))]
+    struct StructWithArgs {}
 
-    // not-so-fast exposes two traits for data validation - `Validate` and
-    // `ValidateArgs`. `Validate` is implemented for types  actually a subtrait of `ValidateArgs` with
-    // associated type `Args` equal `()`. Types that don't have parameterized
-    // validation will implemented both traits.
+    // Types with `args` don't implement `Validate` trait. We have to use
+    // `ValidateArgs` trait instead. `ValidateArgs` exposes `validate_args`
+    // method, which must be supplied with values for parameters.
 
+    // This won't work!
     // use not_so_fast::Validate;
-    assert!(OkStruct { a: "hello".into() }.validate().is_ok());
+    // assert!(StructWithArgs {}.validate().is_ok());
 
+    // This will.
     // use not_so_fast::ValidateArgs;
-    assert!(OkStruct { a: "hello".into() }.validate_args(()).is_ok());
+    assert!(StructWithArgs {}.validate_args((60, 40, '@')).is_ok());
 
-    // When validation is dependant on external data, we can parameterize
-    // derived validator using `args` argument on the validated type.
-
-    #[derive(Validate)]
-    #[validate(args(a: u64, b: bool))]
-    struct StructWithArgs {
-        a: String,
-    }
-
-    // Since `StructWithArgs` requires arguments for validation, it will only
-    // implement `ValidateArgs` trait. `validate_args` method will accept a
-    // reference to value and arguments: one of type `u64` and one of type
-    // `bool`. The parameter names specified in `validate` attribute are
-    // irrelevant at call site, but necessary for routing arguments to custom
-    // and nested validators.
-
-    assert!(StructWithArgs { a: "hello".into() }
-        .validate_args((54, true))
-        .is_ok());
-
-    // Finally, we could add args to outer type and forward them to field
-    // validator. Remember that args are not checked in the macro. If their
-    // types or arity don't match requirements of the field, the compiler will
-    // warn you about type mismatch.
+    // The parameters can be forwarded to `custom` and `nested` validators with
+    // `args` attribute, but also to built-in validators like `range` or
+    // `length`. You can put parameter name everywhere a const goes.
 
     #[derive(Validate)]
-    #[validate(args(a: u64, b: bool, c: char))]
+    #[validate(args(x: u64, y: i32, z: char))]
     struct StructWithArgs2 {
-        #[validate(custom(function = validate_name_with_param, args(100)))]
+        #[validate(range(min = 1, max = x))]
+        a: u64,
+        #[validate(custom(function = validate_b, args(z, 100)))]
         b: String,
-        #[validate(nested(args(a, false)))]
-        a: FieldWithArgs,
+        #[validate(nested(args(-100, y)))]
+        c: FieldWithArgs,
     }
 
-    #[derive(Validate)]
-    #[validate(args(a: u64, b: bool))]
-    struct InnerWithArgs;
+    fn validate_b(b: &str, special_char: char, special_char_limit: usize) -> ValidationNode {
+        ValidationNode::error_if(
+            b.chars().filter(|c| *c == special_char).count() > special_char_limit,
+            || ValidationError::with_code("special_char_count"),
+        )
+    }
 
-    assert!(OuterWithArgs(InnerWithArgs)
-        .validate_args((100, true, 'c'))
-        .is_ok());
+    assert!(StructWithArgs2 {
+        a: 200,
+        b: "@".repeat(200),
+        c: FieldWithArgs(200)
+    }
+    .validate_args((60, 40, '@'))
+    .is_ok());
 
-    // Notice that `OkStructParams` does not implement `Validate` trait.
+    // Remember that `args` forwarded to `custom` and `nested` attributes are
+    // not checked by the derive macro. If their types or arity don't match the
+    // requirements of the field, the generated `ValidateArgs` implementation
+    // will not compile.
 }

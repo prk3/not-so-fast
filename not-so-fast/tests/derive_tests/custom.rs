@@ -7,8 +7,8 @@ fn struct_custom_basic() {
     struct StructCustom {
         a: u8,
     }
-    fn validate_struct(value: &StructCustom) -> ValidationErrors {
-        ValidationErrors::error_if(value.a % 3 == 0, || Error::with_code("x"))
+    fn validate_struct(value: &StructCustom) -> ValidationNode {
+        ValidationNode::error_if(value.a % 3 == 0, || ValidationError::with_code("x"))
     }
 
     assert_eq!("", StructCustom { a: 2 }.validate().to_string());
@@ -22,8 +22,8 @@ fn struct_custom_alternative_syntax() {
     struct StructCustom {
         a: u8,
     }
-    fn validate_struct(value: &StructCustom) -> ValidationErrors {
-        ValidationErrors::error_if(value.a % 3 == 0, || Error::with_code("x"))
+    fn validate_struct(value: &StructCustom) -> ValidationNode {
+        ValidationNode::error_if(value.a % 3 == 0, || ValidationError::with_code("x"))
     }
 
     assert_eq!("", StructCustom { a: 2 }.validate().to_string());
@@ -38,14 +38,14 @@ fn struct_custom_three_custom() {
     struct StructCustom {
         a: u8,
     }
-    fn validate_struct_a(value: &StructCustom) -> ValidationErrors {
-        ValidationErrors::error_if(value.a % 3 == 0, || Error::with_code("a"))
+    fn validate_struct_a(value: &StructCustom) -> ValidationNode {
+        ValidationNode::error_if(value.a % 3 == 0, || ValidationError::with_code("a"))
     }
-    fn validate_struct_b(value: &StructCustom) -> ValidationErrors {
-        ValidationErrors::error_if(value.a % 4 == 0, || Error::with_code("b"))
+    fn validate_struct_b(value: &StructCustom) -> ValidationNode {
+        ValidationNode::error_if(value.a % 4 == 0, || ValidationError::with_code("b"))
     }
-    fn validate_struct_c(value: &StructCustom) -> ValidationErrors {
-        ValidationErrors::error_if(value.a % 5 == 0, || Error::with_code("c"))
+    fn validate_struct_c(value: &StructCustom) -> ValidationNode {
+        ValidationNode::error_if(value.a % 5 == 0, || ValidationError::with_code("c"))
     }
 
     assert_eq!("", StructCustom { a: 2 }.validate().to_string());
@@ -70,9 +70,9 @@ fn struct_custom_with_one_arg() {
     struct StructCustom {
         a: u8,
     }
-    fn validate_struct(value: &StructCustom, a: bool) -> ValidationErrors {
+    fn validate_struct(value: &StructCustom, a: bool) -> ValidationNode {
         assert!(a == true);
-        ValidationErrors::error_if(value.a % 3 == 0, || Error::with_code("x"))
+        ValidationNode::error_if(value.a % 3 == 0, || ValidationError::with_code("x"))
     }
 
     assert_eq!(
@@ -101,11 +101,11 @@ fn struct_custom_with_multiple_args() {
     struct StructCustom {
         a: u8,
     }
-    fn validate_struct(value: &StructCustom, b: &str, c: u64, x: u32) -> ValidationErrors {
+    fn validate_struct(value: &StructCustom, b: &str, c: u64, x: u32) -> ValidationNode {
         assert!(b == "hello");
         assert!(c == 100);
         assert!(x == 10);
-        ValidationErrors::error_if(value.a % 3 == 0, || Error::with_code("x"))
+        ValidationNode::error_if(value.a % 3 == 0, || ValidationError::with_code("x"))
     }
 
     assert_eq!(
@@ -131,8 +131,10 @@ fn enum_custom_basic() {
         B(u8),
         C { x: u16 },
     }
-    fn validate_enum(value: &EnumCustom) -> ValidationErrors {
-        ValidationErrors::error_if(matches!(value, EnumCustom::B(..)), || Error::with_code("x"))
+    fn validate_enum(value: &EnumCustom) -> ValidationNode {
+        ValidationNode::error_if(matches!(value, EnumCustom::B(..)), || {
+            ValidationError::with_code("x")
+        })
     }
 
     assert_eq!("", EnumCustom::A.validate().to_string());
@@ -147,8 +149,8 @@ fn struct_field_custom_basic() {
         #[validate(custom = validate_field)]
         a: u8,
     }
-    fn validate_field(value: &u8) -> ValidationErrors {
-        ValidationErrors::error_if(value % 3 == 0, || Error::with_code("x"))
+    fn validate_field(value: &u8) -> ValidationNode {
+        ValidationNode::error_if(value % 3 == 0, || ValidationError::with_code("x"))
     }
 
     assert_eq!("", StructFieldCustom { a: 2 }.validate().to_string());
@@ -162,8 +164,8 @@ fn struct_field_custom_alternative_syntax() {
         #[validate(custom(function = validate_field))]
         a: u8,
     }
-    fn validate_field(value: &u8) -> ValidationErrors {
-        ValidationErrors::error_if(value % 3 == 0, || Error::with_code("x"))
+    fn validate_field(value: &u8) -> ValidationNode {
+        ValidationNode::error_if(value % 3 == 0, || ValidationError::with_code("x"))
     }
 
     assert_eq!("", StructFieldCustom { a: 2 }.validate().to_string());
@@ -178,14 +180,14 @@ fn field_custom_three_custom() {
         #[validate(custom = validate_field_c)]
         a: u8,
     }
-    fn validate_field_a(value: &u8) -> ValidationErrors {
-        ValidationErrors::error_if(value % 3 == 0, || Error::with_code("a"))
+    fn validate_field_a(value: &u8) -> ValidationNode {
+        ValidationNode::error_if(value % 3 == 0, || ValidationError::with_code("a"))
     }
-    fn validate_field_b(value: &u8) -> ValidationErrors {
-        ValidationErrors::error_if(value % 4 == 0, || Error::with_code("b"))
+    fn validate_field_b(value: &u8) -> ValidationNode {
+        ValidationNode::error_if(value % 4 == 0, || ValidationError::with_code("b"))
     }
-    fn validate_field_c(value: &u8) -> ValidationErrors {
-        ValidationErrors::error_if(value % 5 == 0, || Error::with_code("c"))
+    fn validate_field_c(value: &u8) -> ValidationNode {
+        ValidationNode::error_if(value % 5 == 0, || ValidationError::with_code("c"))
     }
 
     assert_eq!("", FieldCustom { a: 2 }.validate().to_string());
@@ -209,11 +211,11 @@ fn enum_field_custom_basic() {
             x: u16,
         },
     }
-    fn validate_enum_field_b(value: &u8) -> ValidationErrors {
-        ValidationErrors::error_if(*value == 8, || Error::with_code("x"))
+    fn validate_enum_field_b(value: &u8) -> ValidationNode {
+        ValidationNode::error_if(*value == 8, || ValidationError::with_code("x"))
     }
-    fn validate_enum_field_c(value: &u16) -> ValidationErrors {
-        ValidationErrors::error_if(*value == 16, || Error::with_code("x"))
+    fn validate_enum_field_c(value: &u16) -> ValidationNode {
+        ValidationNode::error_if(*value == 16, || ValidationError::with_code("x"))
     }
 
     assert_eq!("", EnumFieldCustom::A.validate().to_string());

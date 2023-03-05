@@ -18,8 +18,6 @@ fn struct_ref() {
         option_ref: &'a Option<String>,
         map_ref: &'a std::collections::HashMap<String, u32>,
     }
-
-    // TODO add support for lifetimes
 }
 
 #[test]
@@ -28,8 +26,8 @@ fn empty_enum() {
     #[validate(args(a: u64, b: bool), custom = validate_empty_enum)]
     enum EmptyEnum {}
 
-    fn validate_empty_enum(value: &EmptyEnum) -> ValidationErrors {
-        ValidationErrors::ok()
+    fn validate_empty_enum(value: &EmptyEnum) -> ValidationNode {
+        ValidationNode::ok()
     }
 
     // We can't construct EmptyEnum. Let's just check if the code compiles.
@@ -60,12 +58,12 @@ fn enum_different_variants() {
         },
     }
 
-    fn validate_string(value: &String, a: u64) -> ValidationErrors {
-        ValidationErrors::error(Error::with_code("s").and_param("a", a))
+    fn validate_string(value: &String, a: u64) -> ValidationNode {
+        ValidationNode::error(ValidationError::with_code("s").and_param("a", a))
     }
 
-    fn validate_enum(value: &Enum, b: bool) -> ValidationErrors {
-        ValidationErrors::error(Error::with_code("e").and_param("b", b))
+    fn validate_enum(value: &Enum, b: bool) -> ValidationNode {
+        ValidationNode::error(ValidationError::with_code("e").and_param("b", b))
     }
 
     assert_eq!(

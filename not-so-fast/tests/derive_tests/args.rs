@@ -62,20 +62,20 @@ fn struct_routing_args() {
         b: Nested,
     }
 
-    fn validate_a(value: &String, a: u64, b: &str) -> ValidationErrors {
+    fn validate_a(value: &String, a: u64, b: &str) -> ValidationNode {
         assert!(a == 10);
         assert!(b == "x");
-        ValidationErrors::ok()
+        ValidationNode::ok()
     }
 
     struct Nested;
 
     impl<'arg> ValidateArgs<'arg> for Nested {
         type Args = (&'arg str, bool);
-        fn validate_args(&self, (b, c): Self::Args) -> ValidationErrors {
+        fn validate_args(&self, (b, c): Self::Args) -> ValidationNode {
             assert!(b == "x");
             assert!(c == false);
-            ValidationErrors::ok()
+            ValidationNode::ok()
         }
     }
 

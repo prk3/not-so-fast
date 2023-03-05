@@ -11,12 +11,12 @@ fn user() {
         pet_names: Vec<String>, // at most 2 items, each at most 10 bytes long
     }
 
-    fn validate_user(user: &User) -> ValidationErrors {
-        ValidationErrors::ok()
+    fn validate_user(user: &User) -> ValidationNode {
+        ValidationNode::ok()
             .and_field(
                 "name",
-                ValidationErrors::error_if(user.name.len() > 5, || {
-                    Error::with_code("length")
+                ValidationNode::error_if(user.name.len() > 5, || {
+                    ValidationError::with_code("length")
                         .and_message("Illegal string length")
                         .and_param("max", 5)
                         .and_param("value", user.name.len())
@@ -24,8 +24,8 @@ fn user() {
             )
             .and_field(
                 "age",
-                ValidationErrors::error_if(user.age < 3, || {
-                    Error::with_code("range")
+                ValidationNode::error_if(user.age < 3, || {
+                    ValidationError::with_code("range")
                         .and_message("Number not in range")
                         .and_param("min", 3)
                         .and_param("value", user.age)
@@ -33,16 +33,16 @@ fn user() {
             )
             .and_field(
                 "pet_names",
-                ValidationErrors::ok()
+                ValidationNode::ok()
                     .and_error_if(user.pet_names.len() > 2, || {
-                        Error::with_code("length")
+                        ValidationError::with_code("length")
                             .and_message("Illegal array length")
                             .and_param("max", 2)
                             .and_param("value", user.pet_names.len())
                     })
                     .and_items(user.pet_names.iter(), |_, item| {
-                        ValidationErrors::error_if(item.len() > 10, || {
-                            Error::with_code("length")
+                        ValidationNode::error_if(item.len() > 10, || {
+                            ValidationError::with_code("length")
                                 .and_message("Illegal string length")
                                 .and_param("max", 10)
                                 .and_param("value", item.len())

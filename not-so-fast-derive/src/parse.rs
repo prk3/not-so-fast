@@ -67,7 +67,7 @@ impl Parse for TypeValidateArgument {
             }
             _ => Err(syn::Error::new_spanned(
                 ident,
-                "Unknown argument. Expected \"args\" or \"custom\"",
+                r#"Unknown argument. Expected "args" or "custom""#,
             )),
         }
     }
@@ -145,6 +145,7 @@ impl Parse for CustomArguments {
                 args: Vec::new(),
             })
         } else {
+            let input_span = input.span();
             let content;
             let _ = parenthesized!(content in input);
 
@@ -183,10 +184,7 @@ impl Parse for CustomArguments {
                         args,
                     })
                 }
-                None => {
-                    // TODO fix
-                    panic!("Validation function not defined");
-                }
+                None => Err(syn::Error::new(input_span, "\"function\" not defined")),
             }
         }
     }
@@ -274,6 +272,107 @@ impl ToTokens for Arg {
     }
 }
 
+/// Arguments to field-level validate attribute.
+///
+/// ```text
+/// #[derive(Validator)]
+/// struct X {
+///     #[validate(custom = myfunc, char_length(max = 100))]
+///                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+///     name: String,
+/// }
+/// ```
+///
+/// Examples:
+/// - `custom = myfunc, length(min=20, max=100)`
+/// - `range(min=15)`
+#[derive(Debug)]
+pub struct FieldValidateArguments {
+    pub arguments: Vec<FieldValidateArgument>,
+}
+
+impl FieldValidateArguments {
+    pub fn empty() -> Self {
+        Self {
+            arguments: vec![FieldValidateArgument::Nested(
+                None,
+                NestedArguments { args: vec![] },
+            )],
+        }
+    }
+}
+
+impl Parse for FieldValidateArguments {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let arguments = Punctuated::<FieldValidateArgument, Token![,]>::parse_terminated(&input)?
+            .into_iter()
+            // TODO error on repeated illegal arguments
+            .collect();
+        Ok(Self { arguments })
+    }
+}
+
+// Same as FieldValidateArguments, but optionally wrapped with parentheses.
+struct OptParenFieldValidateArguments(FieldValidateArguments);
+
+impl Parse for OptParenFieldValidateArguments {
+    fn parse(input: ParseStream) -> Result<Self> {
+        if input.peek(token::Paren) {
+            let content;
+            let _ = parenthesized!(content in input);
+            Ok(Self(content.parse()?))
+        } else {
+            Ok(Self(FieldValidateArguments::empty()))
+        }
+    }
+}
+
+/// Argument to field-level validate attribute.
+///
+/// Examples:
+/// - `custom = myfunc`
+/// - `length(min=20, max=100)`
+#[derive(Debug)]
+pub enum FieldValidateArgument {
+    Some(Ident, Box<FieldValidateArguments>),
+    Items(Ident, Box<FieldValidateArguments>),
+    Fields(Ident, Box<FieldValidateArguments>),
+    Nested(Option<Ident>, NestedArguments),
+    Custom(Ident, CustomArguments),
+    Length(Ident, LengthArguments),
+    CharLength(Ident, LengthArguments),
+    Range(Ident, RangeArguments),
+}
+
+impl Parse for FieldValidateArgument {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let ident = input.parse::<Ident>()?;
+        match ident.to_string().as_str() {
+            "some" => Ok(Self::Some(
+                ident,
+                Box::new(OptParenFieldValidateArguments::parse(input)?.0),
+            )),
+            "items" => Ok(Self::Items(
+                ident,
+                Box::new(OptParenFieldValidateArguments::parse(input)?.0),
+            )),
+            "fields" => Ok(Self::Fields(
+                ident,
+                Box::new(OptParenFieldValidateArguments::parse(input)?.0),
+            )),
+            "nested" => Ok(Self::Nested(Some(ident), input.parse()?)),
+            "custom" => Ok(Self::Custom(ident, input.parse()?)),
+            "length" => Ok(Self::Length(ident, input.parse()?)),
+            "char_length" => Ok(Self::CharLength(ident, input.parse()?)),
+            "range" => Ok(Self::Range(ident, input.parse()?)),
+            _ => Err(syn::Error::new_spanned(
+                ident,
+                r#"Unknown argument. Expected "some", "items", "fields", "nested", "custom", "length", "char_length" or "range""#,
+            )),
+        }
+    }
+}
+
 /// - ``
 /// - `(args(a, b, c))`
 #[derive(Debug)]
@@ -326,63 +425,6 @@ impl Parse for NestedArgument {
                 ident,
                 "Unsupported argument, expected \"args\"",
             ))
-        }
-    }
-}
-
-/// Arguments to field-level validate macro.
-///
-/// ```text
-/// #[derive(Validator)]
-/// struct X {
-///     #[validate(length(max = 100))]
-///                ^^^^^^^^^^^^^^^^^
-///     name: String,
-/// }
-/// ```
-///
-/// Examples:
-/// - `email, length(min=20, max=100)`
-pub struct FieldValidateArguments {
-    pub arguments: Vec<FieldValidateArgument>,
-}
-
-impl Parse for FieldValidateArguments {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let arguments = Punctuated::<FieldValidateArgument, Token![,]>::parse_terminated(&input)?
-            .into_iter()
-            // TODO error on repeated illegal arguments
-            .collect();
-        Ok(Self { arguments })
-    }
-}
-
-#[derive(Debug)]
-pub enum FieldValidateArgument {
-    Custom(Ident, CustomArguments),
-    Nested(Ident, NestedArguments),
-    Email(Ident),
-    Url(Ident),
-    Length(Ident, LengthArguments),
-    CharLength(Ident, LengthArguments),
-    Range(Ident, RangeArguments),
-    Contains { pattern: String },
-}
-
-impl Parse for FieldValidateArgument {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let ident = input.parse::<Ident>()?;
-        match ident.to_string().as_str() {
-            "email" => Ok(Self::Email(ident)),
-            "custom" => Ok(Self::Custom(ident, input.parse()?)),
-            "nested" => Ok(Self::Nested(ident, input.parse()?)),
-            "length" => Ok(Self::Length(ident, input.parse()?)),
-            "char_length" => Ok(Self::CharLength(ident, input.parse()?)),
-            "range" => Ok(Self::Range(ident, input.parse()?)),
-            _ => Err(syn::Error::new_spanned(
-                ident,
-                "Unknown argument. Expected \"email\", TODO",
-            )),
         }
     }
 }
