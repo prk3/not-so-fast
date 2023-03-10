@@ -768,7 +768,7 @@ impl ValidationNode {
 }
 
 /// Trait describing types that can be validated without arguments. It is
-/// implemented for all types that implement `ValidateArgs<Args=()>`.
+/// automatically implemented for all types that implement `ValidateArgs<Args=()>`.
 pub trait Validate {
     fn validate(&self) -> ValidationNode;
 }
@@ -920,4 +920,4 @@ impl serde::Serialize for ValidationNode {
 }
 
 #[cfg(feature = "derive")]
-pub use derive::Validate;
+pub use not_so_fast_derive::Validate;

@@ -1,6 +1,6 @@
 # not-so-fast
 
-not-so-fast is a Rust library for data validation.
+A Rust library for data validation.
 
 ## Features
 
@@ -13,8 +13,13 @@ not-so-fast is a Rust library for data validation.
 ## Installation
 
 ```bash
-cargo add not-so-fast --features derive
+cargo add not-so-fast # --features derive serde
 ```
+
+Available cargo features:
+
+- `derive` - enables `Validate` derive macro, disabled by default
+- `serde` - enables `serde::Serialize` implementation for `ValidationNode`, disabled by default
 
 ## Usage
 
@@ -86,3 +91,5 @@ assert_eq!(
 ## License
 
 Licensed under either of Apache License, Version 2.0 or MIT license at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in this crate by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.

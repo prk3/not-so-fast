@@ -1,18 +1,20 @@
 #![allow(dead_code, unused_variables)]
 
+use std::collections::HashMap;
+
 use not_so_fast::*;
 
 fn main() {
     // - Introduction -
 
-    // This example file shows how to use Validator derive macro to generate
+    // This example file shows how to use `Validator` derive macro to generate
     // validation code for your types from attribute annotations. Keep in
-    // mind that the Validator macro does not understand types in your program
-    // and sometimes you'll need to provide it with more context.
+    // mind that `Validator` derive does not look at field types and you'll
+    // sometimes have to give it hints on how to reach the data.
 
     // - Basics -
 
-    // You can apply Validate derive on structs and enums, regardless of
+    // You can apply `Validate` derive on structs and enums, regardless of
     // whether their fields are named or not.
 
     #[derive(Validate)]
@@ -27,21 +29,129 @@ fn main() {
         Three { a: String },
     }
 
+    assert!(OkStruct { a: "test".into() }.validate().is_ok());
+    assert!(OkEnum::Three { a: "test".into() }.validate().is_ok());
+
     // `Validate` derive implements traits `ValidateArgs` and (indirectly)
-    // `Validate` for our types. However, the default implementation simply
-    // returns `ValidationErrors::ok()`. To validate fields inside struct/enum,
-    // we will need to annotate them appropriately.
+    // `Validate` traits. However, the default implementation simply returns
+    // `ValidationNode::ok()`. To validate fields inside struct/enums, you have
+    // to annotate them with `validate` attribute.
 
-    // - String -
+    // `validate` attribute accepts many different arguments for validating
+    // different data types. This file shows only simple examples. You'll find
+    // the complete documentation in [../../not-so-fast-derive/src/lib.rs].
 
-    // - Number -
+    // - range -
 
-    // - Vec -
+    // `range` checks if a number (signed integer, unsigned integer, float) is
+    // in the specified range. You can define lower and upper bounds with
+    // arguments `min` and `max` respectively.
 
-    // - Nested -
+    #[derive(Validate)]
+    struct StructRange {
+        #[validate(range(min = -100, max = 100))]
+        n: i32,
+    }
 
-    // If field's type also derives `Validate`, or has custom implementation of
-    // `ValidateArgs` trait, we can validate that field like this:
+    assert!(StructRange { n: -101 }.validate().is_err());
+    assert!(StructRange { n: -100 }.validate().is_ok());
+    assert!(StructRange { n: 0 }.validate().is_ok());
+    assert!(StructRange { n: 100 }.validate().is_ok());
+    assert!(StructRange { n: 101 }.validate().is_err());
+
+    // - length -
+
+    // `length` checks if a list (array, slice, Vec, etc.) has correct length.
+    // It can be used with strings, but will then check their byte length, not
+    // character length. Like with `range`, you can define valid length range
+    // with arguments `min` and `max`. If the list has to have an exact length,
+    // use `equals` argument.
+
+    #[derive(Validate)]
+    struct StructLength {
+        #[validate(length(min = 1, max = 3))]
+        l: Vec<u8>,
+    }
+
+    assert!(StructLength { l: vec![] }.validate().is_err());
+    assert!(StructLength { l: vec![1] }.validate().is_ok());
+    assert!(StructLength { l: vec![2, 2] }.validate().is_ok());
+    assert!(StructLength { l: vec![3, 3, 3] }.validate().is_ok());
+    assert!(StructLength {
+        l: vec![4, 4, 4, 4]
+    }
+    .validate()
+    .is_err());
+
+    // - char_length -
+
+    // `char_length` checks if a string (str, String) has correct character
+    // length (count of UTF-8 characters). Accepts the same arguments as
+    // `length` validator.
+
+    #[derive(Validate)]
+    struct StructCharLength {
+        #[validate(char_length(min = 5, max = 10))]
+        s: String,
+    }
+
+    assert!(StructCharLength { s: "hi!".into() }.validate().is_err());
+    assert!(StructCharLength { s: "hello!".into() }.validate().is_ok());
+    assert!(StructCharLength {
+        s: "hello world!".into()
+    }
+    .validate()
+    .is_err());
+    assert!(StructCharLength {
+        s: "€€€€€€€€€€".into()
+    }
+    .validate()
+    .is_ok());
+
+    // - items -
+
+    // `items` tells `Validate` derive to validate all items of a list-like
+    // collection (slice, Vec, VecDeque, etc.). Arguments of the `items`
+    // validator are the same as to the `validate` field attribute (`validate`
+    // arguments are recursive).
+
+    #[derive(Validate)]
+    struct StructItems {
+        #[validate(items(range(max = 10)))]
+        l: Vec<i32>,
+    }
+
+    assert!(StructItems { l: vec![2, 9, 3] }.validate().is_ok());
+    assert!(StructItems { l: vec![9, 20, 5] }.validate().is_err());
+
+    // - fields -
+
+    // `fields` works similar to `items`. It validates values of key-value
+    // collections, like HashMap or BTreeMap. It accepts the same arguments
+    // as field `validate` attribute.
+
+    #[derive(Validate)]
+    struct StructFields {
+        #[validate(fields(char_length(max = 10)))]
+        m: HashMap<String, String>,
+    }
+
+    assert!(StructFields {
+        m: [("a".into(), "good".into())].into_iter().collect()
+    }
+    .validate()
+    .is_ok());
+    assert!(StructFields {
+        m: [("a".into(), "bad bad bad".into())].into_iter().collect()
+    }
+    .validate()
+    .is_err());
+
+    // - nested -
+
+    // `nested` validates field with its `ValidateArgs` trait implementation
+    // (likely derived with `Validate` macro). When `validate` attribute has no
+    // arguments, it defaults to `nested`.
 
     #[derive(Validate)]
     struct Field(#[validate(range(max = 10))] i32);
@@ -56,8 +166,8 @@ fn main() {
         .validate()
         .is_err());
 
-    // If field's `ValidateArgs` implementation has non-empty Args, you'll have
-    // to provide values for these parameters with `args` attribute.
+    // If field's `ValidateArgs` implementation has non-empty `Args`, you'll
+    // have to provide values for these parameters with `args` argument.
 
     #[derive(Validate)]
     #[validate(args(bottom: i32, top: i32))]
@@ -75,11 +185,11 @@ fn main() {
     .validate()
     .is_err());
 
-    // - Custom -
+    // - custom -
 
     // To cover all your validation needs, you'll likely have to write custom
-    // validation functions. We can attach them to struct/enum field with
-    // `custom` argument.
+    // validation functions. `custom` lets you attach these functions to
+    // struct/enum field.
 
     #[derive(Validate)]
     struct StructWithCustom {
@@ -97,7 +207,7 @@ fn main() {
     assert!(StructWithCustom { name: "_n".into() }.validate().is_err());
 
     // Sometimes you need to check values of multiple fields to tell if an
-    // object is valid or not. This can be achieved with `custom` attribute
+    // object is valid or not. This can be achieved with `custom` validator
     // applied on the struct/enum itself.
 
     #[derive(Validate)]
@@ -151,7 +261,7 @@ fn main() {
     // to pass this sort of information to validation functions.
 
     // To express that a type has validation parameters, annotate it with
-    // `args` attribute.
+    // `validate` attribute with `args` argument.
 
     #[derive(Validate)]
     #[validate(args(x: u64, y: i32, z: char))]
@@ -159,7 +269,7 @@ fn main() {
 
     // Types with `args` don't implement `Validate` trait. We have to use
     // `ValidateArgs` trait instead. `ValidateArgs` exposes `validate_args`
-    // method, which must be supplied with values for parameters.
+    // method, which must be supplied with parameter values.
 
     // This won't work!
     // use not_so_fast::Validate;
@@ -170,8 +280,8 @@ fn main() {
     assert!(StructWithArgs {}.validate_args((60, 40, '@')).is_ok());
 
     // The parameters can be forwarded to `custom` and `nested` validators with
-    // `args` attribute, but also to built-in validators like `range` or
-    // `length`. You can put parameter name everywhere a const goes.
+    // `args` argument, but also to built-in validators like `range` or
+    // `length`. You can put parameter name everywhere a const can go.
 
     #[derive(Validate)]
     #[validate(args(x: u64, y: i32, z: char))]
@@ -199,7 +309,7 @@ fn main() {
     .validate_args((60, 40, '@'))
     .is_ok());
 
-    // Remember that `args` forwarded to `custom` and `nested` attributes are
+    // Remember that `args` forwarded to `custom` and `nested` validators are
     // not checked by the derive macro. If their types or arity don't match the
     // requirements of the field, the generated `ValidateArgs` implementation
     // will not compile.

@@ -22,14 +22,14 @@ fn main() {
         })
     }
 
-    // `ValidationErrors::error_if` accepts two parameters. The first is a bool
+    // `ValidationNode::error_if` accepts two parameters. The first is a bool
     // saying whether the value is valid or not. If it's not, `error_if` method
     // calls the second parameter - function returning Error. Here we pass a
     // closure returning an error with code, message, and two params, though
     // only the code is required.
 
     // Now let's check if the validator works as expected. `is_ok` method on
-    // ValidationErrors tells us whether value is valid or not.
+    // ValidationNode tells us whether value is valid or not.
 
     assert!(validate_age(&0).is_ok());
     assert!(validate_age(&35).is_ok());
@@ -56,7 +56,7 @@ fn main() {
             })
     }
 
-    // This time we started with no error (ValidationErrors::ok()) and added
+    // This time we started with no error (ValidationNode::ok()) and added
     // two checks using `and_error_if`.
 
     assert!(validate_username("user123").is_ok());

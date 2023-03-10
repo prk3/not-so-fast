@@ -5,28 +5,27 @@ use syn::{Data, DeriveInput, Field, Fields, Index};
 
 mod parse;
 
-/// Implements ValidateArgs for structs and enums.
+/// Implements `ValidateArgs` for structs and enums.
 ///
 /// ## Supported type attributes
 ///
 /// ### args
 ///
-/// Defines arguments of the ValidateArgs implementation.
+/// Defines `Args` of the `ValidateArgs` implementation.
 ///
 /// ```text
 /// #[validate(args(a: i32, b: bool, ...))]
 /// ```
 ///
 /// Example:
-///
 /// ```
 /// # use ::not_so_fast::*;
-///
+/// # use ::not_so_fast_derive::Validate;
 /// #[derive(Validate)]
 /// #[validate(args(max_len: usize))]
 /// struct Comment {
 ///     author_id: u64,
-///     #[validate(range(max = max_len))]
+///     #[validate(char_length(max = max_len))]
 ///     content: String,
 /// }
 ///
@@ -34,8 +33,8 @@ mod parse;
 ///     author_id: 1,
 ///     content: "Great video! ".repeat(10),
 /// };
-/// assert!(comment.validate_args((100,)).is_ok());
-/// assert!(comment.validate_args((150,)).is_err());
+/// assert!(comment.validate_args((150,)).is_ok());
+/// assert!(comment.validate_args((100,)).is_err());
 /// ```
 ///
 /// ### custom
@@ -54,6 +53,8 @@ mod parse;
 /// Example:
 ///
 /// ```
+/// # use ::not_so_fast::*;
+/// # use ::not_so_fast_derive::Validate;
 /// #[derive(Validate)]
 /// #[validate(custom = validate_comment)]
 /// struct Comment {
@@ -64,7 +65,7 @@ mod parse;
 /// fn validate_comment(comment: &Comment) -> ValidationNode {
 ///     let max_len = if comment.author_id == 0 { 200 } else { 100 };
 ///     ValidationNode::field("content", ValidationNode::error_if(
-///         comment.content.len() > max_len(),
+///         comment.content.len() > max_len,
 ///         || ValidationError::with_code("length")
 ///     ))
 /// }
@@ -97,6 +98,8 @@ mod parse;
 /// Example:
 ///
 /// ```
+/// # use ::not_so_fast::*;
+/// # use ::not_so_fast_derive::Validate;
 /// #[derive(Validate)]
 /// struct Input {
 ///     #[validate(some(range(max = 10)))]
@@ -111,7 +114,7 @@ mod parse;
 /// ### items
 ///
 /// Validates all items in a list-like collection. Works with arrays, slices,
-/// Vec, VecDeque, HashSet, BTreeSet, LinkedList.
+/// `Vec`, `VecDeque`, `HashSet`, `BTreeSet`, `LinkedList`.
 ///
 /// ```text
 /// #[validate(items)]
@@ -121,6 +124,8 @@ mod parse;
 /// Example:
 ///
 /// ```
+/// # use ::not_so_fast::*;
+/// # use ::not_so_fast_derive::Validate;
 /// #[derive(Validate)]
 /// struct Input {
 ///     #[validate(items(range(max = 10)))]
@@ -145,6 +150,10 @@ mod parse;
 /// Example:
 ///
 /// ```
+/// # use ::not_so_fast::*;
+/// # use ::not_so_fast_derive::Validate;
+/// use std::collections::HashMap;
+///
 /// #[derive(Validate)]
 /// struct Input {
 ///     #[validate(fields(char_length(max = 10)))]
@@ -152,8 +161,8 @@ mod parse;
 /// }
 ///
 /// assert!(Input { map: [].into_iter().collect() }.validate().is_ok());
-/// assert!(Input { map: [(1, "hello".into())].into_iter.collect() }.validate().is_ok());
-/// assert!(Input { map: [(1, "x".repeat(100))].into_iter.collect() }.validate().is_err());
+/// assert!(Input { map: [(1, "hello".into())].into_iter().collect() }.validate().is_ok());
+/// assert!(Input { map: [(1, "x".repeat(100))].into_iter().collect() }.validate().is_err());
 /// ```
 ///
 /// ### nested
@@ -168,6 +177,8 @@ mod parse;
 ///
 /// Example:
 /// ```
+/// # use ::not_so_fast::*;
+/// # use ::not_so_fast_derive::Validate;
 /// #[derive(Validate)]
 /// struct Child {
 ///     #[validate(range(max = 10))]
@@ -186,7 +197,7 @@ mod parse;
 ///
 /// ### custom
 ///
-/// Validates field using a custom validator function. The signature of the
+/// Validates field using a custom validation function. The signature of the
 /// function must be `fn(data: &T, args: (A, B, C, ...)) -> ValidationNode` if
 /// it has validation parameters, or `fn(data: &T, args: (A, B, C, ...)) ->
 /// ValidationNode` if it doesn't.
@@ -200,6 +211,8 @@ mod parse;
 /// Example:
 ///
 /// ```
+/// # use ::not_so_fast::*;
+/// # use ::not_so_fast_derive::Validate;
 /// #[derive(Validate)]
 /// struct Input {
 ///     #[validate(custom = validate_username)]
@@ -208,13 +221,13 @@ mod parse;
 ///
 /// fn validate_username(username: &str) -> ValidationNode {
 ///     ValidationNode::error_if(
-///         !username.chars.all(|a| a.is_alpha()),
-///         ValidationError::with_code("non_alpha"),
+///         !username.chars().all(|a| a.is_alphanumeric()),
+///         || ValidationError::with_code("non_alpha"),
 ///     )
 /// }
 ///
-/// assert!(Input { username: "Alex1990" }.validate().is_ok());
-/// assert!(Input { username: "Bob!!!" }.validate().is_err());
+/// assert!(Input { username: "Alex1990".into() }.validate().is_ok());
+/// assert!(Input { username: "Bob!!!".into() }.validate().is_err());
 /// ```
 ///
 /// ### range
@@ -231,6 +244,8 @@ mod parse;
 /// Example:
 ///
 /// ```
+/// # use ::not_so_fast::*;
+/// # use ::not_so_fast_derive::Validate;
 /// #[derive(Validate)]
 /// struct Input {
 ///     #[validate(range(min = 1, max = 100))]
@@ -239,7 +254,7 @@ mod parse;
 ///
 /// assert!(Input { number: 0 }.validate().is_err());
 /// assert!(Input { number: 4 }.validate().is_ok());
-/// assert!(Input { number: 12 }.validate().is_err());
+/// assert!(Input { number: 110 }.validate().is_err());
 /// ```
 ///
 /// ### length
@@ -258,6 +273,8 @@ mod parse;
 /// Example:
 ///
 /// ```
+/// # use ::not_so_fast::*;
+/// # use ::not_so_fast_derive::Validate;
 /// #[derive(Validate)]
 /// struct Input {
 ///     #[validate(length(max = 2))]
@@ -284,15 +301,17 @@ mod parse;
 /// Example:
 ///
 /// ```
+/// # use ::not_so_fast::*;
+/// # use ::not_so_fast_derive::Validate;
 /// #[derive(Validate)]
 /// struct Input {
 ///     #[validate(char_length(max = 5))]
 ///     username: String,
 /// }
 ///
-/// assert!(Input { username: "Chris" }.validate().is_ok());
-/// assert!(Input { username: "María" }.validate().is_ok());
-/// assert!(Input { username: "Isabela" }.validate().is_err());
+/// assert!(Input { username: "Chris".into() }.validate().is_ok());
+/// assert!(Input { username: "María".into() }.validate().is_ok());
+/// assert!(Input { username: "Isabela".into() }.validate().is_err());
 /// ```
 #[proc_macro_derive(Validate, attributes(validate))]
 pub fn derive_validate_args(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
