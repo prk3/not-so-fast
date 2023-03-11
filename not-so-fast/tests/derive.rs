@@ -58,7 +58,7 @@ fn enum_different_variants() {
         },
     }
 
-    fn validate_string(value: &String, a: u64) -> ValidationNode {
+    fn validate_string(value: &str, a: u64) -> ValidationNode {
         ValidationNode::error(ValidationError::with_code("s").and_param("a", a))
     }
 

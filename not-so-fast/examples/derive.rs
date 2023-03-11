@@ -198,7 +198,7 @@ fn main() {
     }
 
     fn validate_name(name: &str) -> ValidationNode {
-        ValidationNode::error_if(name.starts_with("_"), || {
+        ValidationNode::error_if(name.starts_with('_'), || {
             ValidationError::with_code("underscore")
         })
     }

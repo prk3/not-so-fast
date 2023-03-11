@@ -393,7 +393,7 @@ fn expand_validate(type_: DeriveInput) -> Result<TokenStream2, syn::Error> {
                         });
                         (
                             Some(quote! { {#(#names),*} }),
-                            modifiers_for_fields(&variant.fields, &variant_name, false)?,
+                            modifiers_for_fields(&variant.fields, variant_name, false)?,
                         )
                     }
                     Fields::Unnamed(_) => {
@@ -401,7 +401,7 @@ fn expand_validate(type_: DeriveInput) -> Result<TokenStream2, syn::Error> {
                             .map(|i| Ident::new(&format!("field{i}"), variant_name.span()));
                         (
                             Some(quote! { (#(#names),*) }),
-                            modifiers_for_fields(&variant.fields, &variant_name, false)?,
+                            modifiers_for_fields(&variant.fields, variant_name, false)?,
                         )
                     }
                     Fields::Unit => (None, Vec::new()),
@@ -456,7 +456,7 @@ fn expand_validate(type_: DeriveInput) -> Result<TokenStream2, syn::Error> {
                 let args = validator.args;
                 quote! { #function(&self, #(#args),*) }
             }));
-            let field_modifiers = modifiers_for_fields(&data_struct.fields, &type_name, true)?;
+            let field_modifiers = modifiers_for_fields(&data_struct.fields, type_name, true)?;
 
             Ok(quote! {
                 impl<'arg, #(#generics_full),*> ::not_so_fast::ValidateArgs<'arg> for #type_name<#(#generics_short),*> {
@@ -528,8 +528,7 @@ fn node_for_field(
                     }
                     (Some(ident), false) => quote! { #ident },
                     (None, false) => {
-                        let name =
-                            Ident::new(&format!("field{field_index}"), type_ident.span().clone());
+                        let name = Ident::new(&format!("field{field_index}"), type_ident.span());
                         quote! { #name }
                     }
                 };

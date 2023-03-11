@@ -71,7 +71,7 @@ fn struct_custom_with_one_arg() {
         a: u8,
     }
     fn validate_struct(value: &StructCustom, a: bool) -> ValidationNode {
-        assert!(a == true);
+        assert!(a);
         ValidationNode::error_if(value.a % 3 == 0, || ValidationError::with_code("x"))
     }
 

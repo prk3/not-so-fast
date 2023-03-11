@@ -192,7 +192,7 @@ fn main() {
     // properties depend on each other? We can add an error at the object level.
 
     fn validate_mean_user(user: &User) -> ValidationNode {
-        validate_user(&user).and_error_if(
+        validate_user(user).and_error_if(
             user.username.starts_with("mean") && !user.friends.is_empty(),
             || {
                 ValidationError::with_code("mean_user_invariant")

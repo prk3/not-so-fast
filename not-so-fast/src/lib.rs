@@ -51,6 +51,9 @@ use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
+#[cfg(feature = "derive")]
+pub use not_so_fast_derive::Validate;
+
 /// Describes what is wrong with the validated value. It contains code, an
 /// optional message, and a list of error parameters.
 #[derive(Debug)]
@@ -697,74 +700,6 @@ impl ValidationNode {
             Self::ok()
         }
     }
-
-    fn display_fmt<'s, 'p, 'e, 'f>(
-        &'s self,
-        path: &'p mut Vec<PathElement<'s>>,
-        first_printed: &'p mut bool,
-        f: &'f mut std::fmt::Formatter,
-    ) -> std::fmt::Result {
-        for direct in self.errors.iter() {
-            if *first_printed {
-                f.write_char('\n')?;
-                fmt_path_and_error(&direct, path.as_slice(), f)?;
-            } else {
-                fmt_path_and_error(&direct, path.as_slice(), f)?;
-                *first_printed = true;
-            }
-        }
-        for field in self.fields.iter() {
-            path.push(PathElement::Name(field.0));
-            field.1.display_fmt(path, first_printed, f)?;
-            path.pop();
-        }
-        for item in self.items.iter() {
-            path.push(PathElement::Index(*item.0));
-            item.1.display_fmt(path, first_printed, f)?;
-            path.pop();
-        }
-        Ok(())
-    }
-
-    #[cfg(feature = "serde")]
-    fn serialize_elements<'s, S>(
-        &'s self,
-        path: &mut Vec<PathElement<'s>>,
-        buffer: &mut String,
-        seq_serializer: &mut S::SerializeSeq,
-    ) -> Result<(), S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeSeq;
-
-        for direct in self.errors.iter() {
-            // TODO Figure out a way to serialize path and error without
-            // creating temporary strings or using the buffer.
-            buffer.clear();
-            write!(buffer, "{}", Path(path.as_slice())).unwrap();
-            let path_len = buffer.len();
-            write!(buffer, "{}", ErrorDisplay(&direct)).unwrap();
-
-            let path = &buffer[0..path_len];
-            let error = &buffer[path_len..buffer.len()];
-            seq_serializer.serialize_element(&(path, error))?;
-        }
-        for field in self.fields.iter() {
-            path.push(PathElement::Name(field.0));
-            field
-                .1
-                .serialize_elements::<S>(path, buffer, seq_serializer)?;
-            path.pop();
-        }
-        for item in self.items.iter() {
-            path.push(PathElement::Index(*item.0));
-            item.1
-                .serialize_elements::<S>(path, buffer, seq_serializer)?;
-            path.pop();
-        }
-        Ok(())
-    }
 }
 
 /// Trait describing types that can be validated without arguments. It is
@@ -788,9 +723,55 @@ where
     }
 }
 
+impl std::fmt::Display for ValidationNode {
+    /// Prints validation errors, one per line with `jq`-like path and an error
+    /// description.
+    /// ```text
+    /// .: invariant_x: property x is not greater than property y
+    /// .abc[4]: length: illegal string length: min=10, max=20, value=34
+    /// .def.ghi: test
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut path = Vec::new();
+        display_fmt(self, &mut path, &mut false, f)
+    }
+}
+
 enum PathElement<'a> {
     Name(&'a str),
     Index(usize),
+}
+
+fn display_fmt<'s, 'p>(
+    node: &'s ValidationNode,
+    path: &'p mut Vec<PathElement<'s>>,
+    first_printed: &'p mut bool,
+    f: &mut std::fmt::Formatter,
+) -> std::fmt::Result {
+    for direct in node.errors.iter() {
+        if *first_printed {
+            f.write_char('\n')?;
+            fmt_path(path.as_slice(), f)?;
+            f.write_str(": ")?;
+            fmt_error(direct, f)?;
+        } else {
+            fmt_path(path.as_slice(), f)?;
+            f.write_str(": ")?;
+            fmt_error(direct, f)?;
+            *first_printed = true;
+        }
+    }
+    for field in node.fields.iter() {
+        path.push(PathElement::Name(field.0));
+        display_fmt(field.1, path, first_printed, f)?;
+        path.pop();
+    }
+    for item in node.items.iter() {
+        path.push(PathElement::Index(*item.0));
+        display_fmt(item.1, path, first_printed, f)?;
+        path.pop();
+    }
+    Ok(())
 }
 
 fn fmt_path(path: &[PathElement], f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -857,67 +838,125 @@ fn fmt_error(error: &ValidationError, f: &mut std::fmt::Formatter) -> std::fmt::
     Ok(())
 }
 
-fn fmt_path_and_error(
-    error: &ValidationError,
-    path: &[PathElement],
-    f: &mut std::fmt::Formatter,
-) -> std::fmt::Result {
-    fmt_path(path, f)?;
-    f.write_str(": ")?;
-    fmt_error(error, f)
-}
-
-struct Path<'a, 'b>(&'a [PathElement<'b>]);
-
-impl<'a, 'b> std::fmt::Display for Path<'a, 'b> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fmt_path(self.0, f)
-    }
-}
-
-struct ErrorDisplay<'a>(&'a ValidationError);
-
-impl<'a> std::fmt::Display for ErrorDisplay<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fmt_error(self.0, f)
-    }
-}
-
-impl std::fmt::Display for ValidationNode {
-    /// Prints validation errors, one per line with `jq`-like path and an error
-    /// description.
-    /// ```text
-    /// .: invariant_x: property x is not greater than property y
-    /// .abc[4]: length: illegal string length: min=10, max=20, value=34
-    /// .def.ghi: test
-    /// ```
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut path = Vec::new();
-        self.display_fmt(&mut path, &mut false, f)
-    }
-}
-
 #[cfg(feature = "serde")]
-impl serde::Serialize for ValidationNode {
-    /// Serializes validation errors as an array of error tuples, each
-    /// containing `jq`-like path and error description, e.g.
-    /// ```json
-    /// [
-    ///     [".", "invariant_x: property x is not greater than property y"],
-    ///     [".abc[4]", "length: illegal string length: min=10, max=20, value=34"],
-    ///     [".def.ghi", "test"]
-    /// ]
-    /// ```
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeSeq;
+mod serde {
+    use std::fmt::Write;
 
-        let mut path = Vec::new();
-        let mut buffer = String::new();
-        let mut seq = serializer.serialize_seq(None)?;
-        self.serialize_elements::<S>(&mut path, &mut buffer, &mut seq)?;
-        seq.end()
+    use super::{ValidationError, ValidationNode};
+
+    impl serde::Serialize for ValidationNode {
+        /// Serializes validation node into a tree reflecting the structure
+        /// of validated data. Value errors are serialized as string lists
+        /// attached to validation nodes.
+        ///
+        /// ```json
+        /// {
+        ///     "errors": [
+        ///         "invariant_x: property x is not greater than property y"
+        ///     ],
+        ///     "abc": {
+        ///         "4": {
+        ///             "errors": "length: illegal string length: min=10, max=20, value=34"
+        ///         }
+        ///     },
+        ///     "def": {
+        ///         "ghi": {
+        ///             "errors": "test"
+        ///         }
+        ///     }
+        /// }
+        /// ```
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            // Every value error has to be rendered to a nice message string.
+            // To reduce the number of allocations, we crete a buffer at the
+            // root for the entire tree and reuse it. Unfortunately, serde does
+            // not allow passing mutable data down to serializers, so we'll
+            // pass mutable pointer and cast it to mut reference with unsafe.
+            let mut buffer = String::new();
+            SerializableValidationNode(self, &mut buffer).serialize(serializer)
+        }
+    }
+
+    struct SerializableValidationNode<'a>(&'a ValidationNode, *mut String);
+
+    impl<'a> serde::Serialize for SerializableValidationNode<'a> {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            use serde::ser::SerializeMap;
+
+            let (node, buffer) = (self.0, self.1);
+
+            let entries =
+                usize::from(!node.errors.is_empty()) + node.fields.len() + node.items.len();
+
+            let mut map = serializer.serialize_map(Some(entries))?;
+
+            if !node.errors.is_empty() {
+                map.serialize_entry(
+                    "errors",
+                    &SerializableValidationErrors(&node.errors, buffer),
+                )?;
+            }
+            for (name, field) in &node.fields {
+                map.serialize_entry(name, &SerializableValidationNode(field, buffer))?;
+            }
+            for (index, item) in &node.items {
+                map.serialize_entry(index, &SerializableValidationNode(item, buffer))?;
+            }
+
+            map.end()
+        }
+    }
+
+    struct SerializableValidationErrors<'a>(&'a [ValidationError], *mut String);
+
+    impl<'a> serde::Serialize for SerializableValidationErrors<'a> {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            use serde::ser::SerializeSeq;
+
+            let (errors, buffer) = (self.0, self.1);
+
+            let mut seq = serializer.serialize_seq(Some(errors.len()))?;
+
+            for error in errors {
+                seq.serialize_element(&SerializableValidationError(error, buffer))?;
+            }
+
+            seq.end()
+        }
+    }
+
+    struct SerializableValidationError<'a>(&'a ValidationError, *mut String);
+
+    impl<'a> serde::Serialize for SerializableValidationError<'a> {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            let (error, buffer) = (self.0, self.1);
+
+            // This is a workaround for serde's serialization API giving us
+            // only immutable data. I can't think of any case where this could
+            // lead to undefined behavior.
+            let buffer = unsafe { buffer.as_mut().unwrap() };
+
+            buffer.write_str(&error.code).unwrap();
+
+            if let Some(message) = &error.message {
+                buffer.write_str(": ").unwrap();
+                buffer.write_str(message).unwrap();
+            }
+
+            for (i, param) in error.params.iter().enumerate() {
+                if i == 0 {
+                    buffer.write_str(": ").unwrap();
+                } else {
+                    buffer.write_str(", ").unwrap();
+                }
+                buffer.write_str(param.0).unwrap();
+                buffer.write_char('=').unwrap();
+                write!(buffer, "{}", param.1).unwrap();
+            }
+
+            let result = serializer.serialize_str(buffer);
+            buffer.clear();
+            result
+        }
     }
 }
-
-#[cfg(feature = "derive")]
-pub use not_so_fast_derive::Validate;

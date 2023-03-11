@@ -22,7 +22,7 @@ pub struct TypeValidateArguments {
 
 impl Parse for TypeValidateArguments {
     fn parse(input: ParseStream) -> Result<Self> {
-        let arguments = Punctuated::<TypeValidateArgument, Token![,]>::parse_terminated(&input)?
+        let arguments = Punctuated::<TypeValidateArgument, Token![,]>::parse_terminated(input)?
             .into_iter()
             .try_fold(Vec::new(), |mut acc, argument| match argument {
                 TypeValidateArgument::Args(ident, _)
@@ -304,7 +304,7 @@ impl FieldValidateArguments {
 
 impl Parse for FieldValidateArguments {
     fn parse(input: ParseStream) -> Result<Self> {
-        let arguments = Punctuated::<FieldValidateArgument, Token![,]>::parse_terminated(&input)?
+        let arguments = Punctuated::<FieldValidateArgument, Token![,]>::parse_terminated(input)?
             .into_iter()
             // TODO error on repeated illegal arguments
             .collect();
@@ -398,7 +398,7 @@ impl Parse for NestedArguments {
                 }
             }
             Ok(Self {
-                args: args.unwrap_or_else(Vec::new),
+                args: args.unwrap_or_default(),
             })
         } else {
             Ok(Self { args: Vec::new() })
