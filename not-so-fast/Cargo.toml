@@ -14,7 +14,7 @@ readme = "../README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-not-so-fast-derive = { package = "not-so-fast-derive", path = "../not-so-fast-derive", optional = true }
+not-so-fast-derive = { version = "0.1.0", path = "../not-so-fast-derive", optional = true }
 serde = { version = "1", optional = true }
 
 [dev-dependencies]
