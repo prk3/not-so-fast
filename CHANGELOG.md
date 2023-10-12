@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2023-10-12
+
+### Added
+
+- Support for stateful items and fields validators
+
 ## [0.1.0] - 2023-03-11
 
 ### Added
@@ -15,5 +21,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Validator derive macro
 - CI
 
-[unreleased]: https://github.com/prk3/not-so-fast/compare/0.1.0...HEAD
+[unreleased]: https://github.com/prk3/not-so-fast/compare/0.2.0...HEAD
+[0.2.0]:      https://github.com/prk3/not-so-fast/releases/tag/0.2.0
 [0.1.0]:      https://github.com/prk3/not-so-fast/releases/tag/0.1.0

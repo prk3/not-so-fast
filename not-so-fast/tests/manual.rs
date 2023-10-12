@@ -73,3 +73,21 @@ fn user() {
         errors.to_string()
     );
 }
+
+#[test]
+fn stateful_item_validation() {
+    fn validate_unique_numbers(numbers: &[i32]) -> ValidationNode {
+        let mut numbers_seen = std::collections::HashSet::new();
+
+        ValidationNode::items(numbers.iter(), |index, item| {
+            let first_occurrence = numbers_seen.insert(item);
+            ValidationNode::error_if(!first_occurrence, || {
+                ValidationError::with_code("non_unique")
+                    .and_message(format!("Number {item} at position {index} is non-unique"))
+            })
+        })
+    }
+
+    assert!(validate_unique_numbers(&[1, 4, 5, 6, 8, 9]).is_ok());
+    assert!(validate_unique_numbers(&[1, 2, 3, 2, 4, 5, 6, 7]).is_err());
+}

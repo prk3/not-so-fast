@@ -291,7 +291,7 @@ impl ValidationNode {
 
     /// Merges `other` info `self` in-place (through `&mut`).
     fn merge_in_place(&mut self, other: ValidationNode) {
-        self.errors.extend(other.errors.into_iter());
+        self.errors.extend(other.errors);
         for (key, value) in other.fields {
             match self.fields.entry(key) {
                 Entry::Vacant(entry) => {
@@ -507,7 +507,7 @@ impl ValidationNode {
     /// ```
     pub fn fields<'a, K: 'a, V: 'a>(
         iterator: impl Iterator<Item = (&'a K, &'a V)>,
-        f: impl Fn(&'a K, &'a V) -> ValidationNode,
+        mut f: impl FnMut(&'a K, &'a V) -> ValidationNode,
     ) -> Self
     where
         // The requirement for K here is not `impl Into<Cow<_, str>>` like in
@@ -547,7 +547,7 @@ impl ValidationNode {
     pub fn and_fields<'a, K: 'a, V: 'a>(
         self,
         iterator: impl Iterator<Item = (&'a K, &'a V)>,
-        f: impl Fn(&'a K, &'a V) -> ValidationNode,
+        f: impl FnMut(&'a K, &'a V) -> ValidationNode,
     ) -> Self
     where
         K: ToString,
@@ -625,7 +625,7 @@ impl ValidationNode {
     /// ```
     pub fn items<'a, T: 'a>(
         items: impl Iterator<Item = &'a T>,
-        f: impl Fn(usize, &'a T) -> ValidationNode,
+        mut f: impl FnMut(usize, &'a T) -> ValidationNode,
     ) -> Self {
         items
             .enumerate()
@@ -649,7 +649,7 @@ impl ValidationNode {
     pub fn and_items<'a, T: 'a>(
         self,
         items: impl Iterator<Item = &'a T>,
-        f: impl Fn(usize, &'a T) -> ValidationNode,
+        f: impl FnMut(usize, &'a T) -> ValidationNode,
     ) -> Self {
         self.merge(Self::items(items, f))
     }

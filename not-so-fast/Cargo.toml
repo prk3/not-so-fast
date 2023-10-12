@@ -1,6 +1,6 @@
 [package]
 name = "not-so-fast"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "A library for data validation with derive macro"
 authors = ["Przemysław Kukulski <kukulski.przemyslaw@gmail.com>"]
